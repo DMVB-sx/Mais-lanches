@@ -1,0 +1,53 @@
+<?php
+// api/pedidos.php
+require_once __DIR__ . '/auth_api.php'; // apenas admin logado pode ver/alterar pedidos
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST');
+
+require_once __DIR__ . '/../config/conexao.php';
+
+$estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
+$metodo = $_SERVER['REQUEST_METHOD'];
+
+try {
+    // 1. GET: Retorna pedidos
+    if ($metodo === 'GET') {
+        $stmt = $pdo->prepare("
+            SELECT * FROM pedidos 
+            WHERE estabelecimento_id = :estab 
+            ORDER BY id DESC
+        ");
+        $stmt->execute([':estab' => $estabId]);
+        $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($pedidos as &$p) {
+            $stmtItens = $pdo->prepare("SELECT * FROM pedido_itens WHERE pedido_id = :id");
+            $stmtItens->execute([':id' => $p['id']]);
+            $p['itens'] = $stmtItens->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode(['sucesso' => true, 'pedidos' => $pedidos]);
+        exit;
+    }
+
+    // 2. POST: Atualiza status do pedido (novo, em_preparo, saiu_entrega, concluido ou arquivado)
+    if ($metodo === 'POST') {
+        $dados = json_decode(file_get_contents('php://input'), true);
+        $pedidoId = isset($dados['pedido_id']) ? (int)$dados['pedido_id'] : 0;
+        $novoStatus = $dados['status'] ?? 'novo';
+
+        $stmt = $pdo->prepare("UPDATE pedidos SET status = :status WHERE id = :id AND estabelecimento_id = :estab");
+        $stmt->execute([':status' => $novoStatus, ':id' => $pedidoId, ':estab' => $estabId]);
+
+        echo json_encode(['sucesso' => true]);
+        exit;
+    }
+
+} catch (Exception $e) {
+    http_response_code(500);
+    error_log('pedidos.php: ' . $e->getMessage());
+    echo json_encode(['sucesso' => false, 'erro' => 'Erro ao processar pedidos.']);
+}

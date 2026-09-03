@@ -1,0 +1,17 @@
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Configurações de IDE
+.vscode/
+.idea/
+
+# Backups ou logs temporários
+*.log
+*.tmp
+
+# Credenciais de sessão do WhatsApp (Baileys) — NUNCA versionar
+whatsapp-bot/auth_info_baileys/
+
+# Dependências do Node.js — reinstale com "npm install"
+whatsapp-bot/node_modules/
