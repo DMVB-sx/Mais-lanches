@@ -1,50 +1,33 @@
 <?php
-// cardapio.php
+// admin/cardapio.php — Gestão de cardápio (produtos): criar, editar, excluir,
+// marcar disponível/indisponível e ajustar preço.
+require_once __DIR__ . '/auth.php';
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 
-require_once __DIR__ . '/config/conexao.php';
+require_once __DIR__ . '/../config/conexao.php';
 
 $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
 
-// 1. Busca dados do estabelecimento
 $stmtEstab = $pdo->prepare("SELECT * FROM estabelecimentos WHERE id = :id LIMIT 1");
 $stmtEstab->execute([':id' => $estabId]);
 $estab = $stmtEstab->fetch(PDO::FETCH_ASSOC);
+$nomeEstab = $estab['nome'] ?? 'Drilavy Lanchonete e Pizzaria';
 
-if (!$estab) {
-    die("<h2 style='color:red; text-align:center; margin-top:50px; font-family:sans-serif;'>Estabelecimento não encontrado.</h2>");
-}
-
-// 2. Busca categorias
-$stmtCat = $pdo->prepare("
-    SELECT * FROM categorias 
-    WHERE estabelecimento_id = :estab 
-    ORDER BY id ASC
-");
+$stmtCat = $pdo->prepare("SELECT id, nome FROM categorias WHERE estabelecimento_id = :estab ORDER BY ordem ASC");
 $stmtCat->execute([':estab' => $estabId]);
-$categorias = $stmtCat->fetchAll(PDO::FETCH_ASSOC);
+$categoriasIniciais = $stmtCat->fetchAll(PDO::FETCH_ASSOC);
 
-// 3. Busca produtos
-$stmtProd = $pdo->prepare("
-    SELECT * FROM produtos 
-    WHERE estabelecimento_id = :estab 
-    ORDER BY categoria_id ASC, preco ASC
-");
+$stmtProd = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab ORDER BY categoria_id ASC, nome ASC");
 $stmtProd->execute([':estab' => $estabId]);
-$produtos = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
-
-$produtosPorCategoria = [];
-foreach ($produtos as $p) {
-    $produtosPorCategoria[$p['categoria_id']][] = $p;
-}
+$produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><?= htmlspecialchars($estab['nome']) ?> - Cardápio Online</title>
+    <title>Gestão de Cardápio - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -63,332 +46,295 @@ foreach ($produtos as $p) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .switch-toggle { appearance: none; -webkit-appearance: none; width: 38px; height: 22px; border-radius: 999px; background: rgba(255,255,255,0.12); position: relative; cursor: pointer; transition: .2s; flex-shrink: 0; }
+        .switch-toggle:checked { background: #16a34a; }
+        .switch-toggle::before { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: .2s; }
+        .switch-toggle:checked::before { left: 18px; }
     </style>
 </head>
-<body class="min-h-screen bg-dark-base text-slate-100 flex flex-col antialiased pb-28">
+<body class="min-h-screen bg-dark-base text-slate-100 flex flex-col antialiased">
 
-    <!-- Header / Banner da Loja -->
-    <header class="pt-8 pb-4 px-4 text-center flex flex-col items-center">
-        <!-- Logo -->
-        <div class="w-24 h-24 rounded-full bg-gradient-to-tr from-brand-600 to-fuchsia-500 p-1 shadow-xl shadow-purple-950/80 mb-3 relative">
-            <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
-                <img src="assets/img/logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='assets/img/logo.jpg';">
+    <!-- Top Header -->
+    <header class="sticky top-0 z-40 bg-dark-surface/90 backdrop-blur-md border-b border-dark-border px-4 sm:px-6 py-3">
+        <div class="max-w-5xl mx-auto flex items-center justify-between gap-2">
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="index.php?estab=<?= $estabId ?>" class="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border flex items-center justify-center transition shrink-0">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                </a>
+                <h1 class="text-sm font-extrabold text-white tracking-tight truncate">
+                    Gestão de Cardápio
+                </h1>
             </div>
-        </div>
 
-        <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-            <?= htmlspecialchars($estab['nome']) ?>
-        </h1>
-
-        <!-- Container da Badge Aberto/Fechado (Controlado em Tempo Real via API) -->
-        <div id="container-status-loja" class="mt-2.5">
-            <span class="px-3.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-white/10 inline-flex items-center gap-1.5 shadow-sm">
-                <i class="fa-solid fa-spinner fa-spin text-[10px]"></i> Verificando status...
-            </span>
-        </div>
-
-        <!-- Faixa Informativa de Horário -->
-        <div class="mt-3 w-full max-w-md bg-[#181326] border border-amber-500/20 rounded-2xl py-2 px-4 text-xs font-semibold text-amber-300 flex items-center justify-center gap-2 shadow-inner">
-            <i class="fa-regular fa-clock text-amber-400"></i>
-            <span>Horário de funcionamento: <b>18:00 às 22:30</b></span>
+            <button onclick="abrirModalProduto()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white transition active:scale-95 flex items-center gap-1.5 shrink-0 shadow-lg shadow-purple-950/40">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>Novo Item</span>
+            </button>
         </div>
     </header>
 
-    <!-- Navegação de Categorias -->
-    <nav class="sticky top-0 z-30 bg-dark-base/90 backdrop-blur-md border-y border-dark-border py-3 px-4">
-        <div class="max-w-4xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <?php foreach ($categorias as $index => $cat): ?>
-                <a href="#cat-<?= $cat['id'] ?>" class="px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition <?= $index === 0 ? 'bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white shadow-lg' : 'bg-dark-card text-slate-300 border border-dark-border' ?>">
-                    <?= htmlspecialchars($cat['nome']) ?>
-                </a>
-            <?php endforeach; ?>
+    <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6">
+        <div id="busca-container" class="mb-4">
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                </span>
+                <input type="text" id="input-busca" oninput="renderizarProdutos()" placeholder="Buscar item pelo nome..." class="w-full pl-9 p-3 bg-dark-surface border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+            </div>
         </div>
-    </nav>
 
-    <!-- Lista de Itens -->
-    <main class="max-w-4xl mx-auto w-full px-4 mt-6 space-y-8 flex-1">
-        <?php foreach ($categorias as $cat): ?>
-            <?php $prods = $produtosPorCategoria[$cat['id']] ?? []; ?>
-            <?php if (!empty($prods)): ?>
-                <section id="cat-<?= $cat['id'] ?>" class="space-y-3 pt-2">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
-                            <?= htmlspecialchars($cat['nome']) ?>
-                        </h2>
-                        <span class="text-[11px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
-                            <?= count($prods) ?> <?= count($prods) == 1 ? 'opção' : 'opções' ?>
-                        </span>
-                    </div>
+        <div id="lista-categorias" class="space-y-6"></div>
 
-                    <div class="grid grid-cols-1 gap-3">
-                        <?php foreach ($prods as $p): ?>
-                            <div class="bg-dark-card border border-dark-border rounded-2xl p-4 shadow-lg flex items-center justify-between gap-3 hover:border-brand-500/30 transition">
-                                <div class="space-y-1 flex-1">
-                                    <h3 class="text-sm font-bold text-white"><?= htmlspecialchars($p['nome']) ?></h3>
-                                    <?php if (!empty($p['descricao'])): ?>
-                                        <p class="text-xs text-slate-400 line-clamp-2"><?= htmlspecialchars($p['descricao']) ?></p>
-                                    <?php endif; ?>
-                                    <p class="text-sm font-black text-brand-400 pt-1">
-                                        R$ <?= number_format($p['preco'], 2, ',', '.') ?>
-                                    </p>
-                                </div>
-
-                                <button onclick="adicionarAoCarrinho(<?= htmlspecialchars(json_encode($p)) ?>)" class="px-4 py-2 bg-brand-600/20 hover:bg-brand-600 text-brand-300 hover:text-white border border-brand-500/30 rounded-xl text-xs font-bold transition active:scale-95 shrink-0 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-plus text-[10px]"></i> Adicionar
-                                </button>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </section>
-            <?php endif; ?>
-        <?php endforeach; ?>
+        <div id="estado-vazio" class="hidden text-center py-16 text-slate-500">
+            <i class="fa-solid fa-box-open text-3xl mb-3"></i>
+            <p class="text-xs">Nenhum item encontrado.</p>
+        </div>
     </main>
 
-    <!-- Barra Inferior Sacola -->
-    <div id="barra-sacola" class="fixed bottom-0 inset-x-0 bg-dark-surface/95 backdrop-blur-lg border-t border-dark-border p-3 sm:p-4 z-40">
-        <div class="max-w-4xl mx-auto flex items-center justify-between gap-3">
+    <!-- Modal Criar/Editar Produto -->
+    <div id="modal-produto" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-dark-surface border border-dark-border rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div class="flex items-center justify-between">
+                <h2 id="modal-titulo" class="text-sm font-extrabold text-white">Novo Item</h2>
+                <button onclick="fecharModalProduto()" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="produto-id" value="">
+
             <div>
-                <p class="text-[11px] text-slate-400 font-medium">Total da sua sacola</p>
-                <p id="total-sacola-barra" class="text-base font-extrabold text-white">R$ 0,00</p>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Nome do item</label>
+                <input type="text" id="produto-nome" placeholder="Ex: X-Salada" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
             </div>
 
-            <button onclick="abrirModalSacola()" class="px-5 py-3 bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-extrabold rounded-2xl text-xs sm:text-sm transition active:scale-95 shadow-lg flex items-center gap-2">
-                <i class="fa-solid fa-bag-shopping"></i> Ver Sacola (<span id="qtd-itens-barra">0</span>)
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Categoria</label>
+                <select id="produto-categoria" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Descrição</label>
+                <textarea id="produto-descricao" rows="3" placeholder="Ingredientes, detalhes do item..." class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition resize-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Preço (R$)</label>
+                <input type="number" id="produto-preco" step="0.01" min="0" placeholder="0.00" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+            </div>
+
+            <button onclick="salvarProduto()" class="w-full bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-extrabold p-3.5 rounded-xl text-xs transition active:scale-95 shadow-lg shadow-purple-950/60 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-check"></i> Salvar Item
             </button>
-        </div>
-    </div>
-
-    <!-- Modal da Sacola / Finalização -->
-    <div id="modal-sacola" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div class="bg-dark-surface border border-dark-border w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            <div class="p-4 border-b border-dark-border flex items-center justify-between">
-                <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-bag-shopping text-brand-400"></i> Sua Sacola
-                </h3>
-                <button onclick="fecharModalSacola()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-            </div>
-
-            <div class="p-4 overflow-y-auto space-y-4 flex-1">
-                <div id="lista-itens-sacola" class="space-y-2"></div>
-
-                <div class="space-y-2 pt-2 border-t border-dark-border">
-                    <label class="block text-xs font-bold text-slate-300">Tipo de Entrega</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <label class="flex items-center justify-center gap-2 p-3 bg-dark-card border border-brand-500/40 rounded-xl cursor-pointer text-xs font-bold text-white">
-                            <input type="radio" name="tipo_entrega" value="delivery" checked onchange="atualizarTotais()">
-                            <i class="fa-solid fa-motorcycle text-brand-400"></i> Delivery
-                        </label>
-                        <label class="flex items-center justify-center gap-2 p-3 bg-dark-card border border-dark-border rounded-xl cursor-pointer text-xs font-bold text-white">
-                            <input type="radio" name="tipo_entrega" value="retirada" onchange="atualizarTotais()">
-                            <i class="fa-solid fa-store text-amber-400"></i> Retirada
-                        </label>
-                    </div>
-                </div>
-
-                <div class="space-y-3 pt-2 border-t border-dark-border">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Seu Nome *</label>
-                        <input type="text" id="cli-nome" placeholder="Ex: Daniel" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-400 mb-1">WhatsApp *</label>
-                        <input type="tel" id="cli-wpp" placeholder="Ex: 75988887777" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                    </div>
-                    <div id="box-endereco" class="space-y-2">
-                        <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Rua e Número *</label>
-                            <input type="text" id="cli-endereco" placeholder="Ex: Rua A, 123" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Bairro *</label>
-                                <input type="text" id="cli-bairro" placeholder="Ex: Centro" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold text-slate-400 mb-1">Complemento</label>
-                                <input type="text" id="cli-compl" placeholder="Ex: Casa" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-2 pt-2 border-t border-dark-border">
-                    <label class="block text-xs font-bold text-slate-300">Forma de Pagamento</label>
-                    <select id="forma-pagamento" class="w-full p-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:border-brand-500 focus:outline-none">
-                        <option value="pix">PIX</option>
-                        <option value="cartao">Cartão na Entrega</option>
-                        <option value="dinheiro">Dinheiro</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="p-4 bg-dark-card border-t border-dark-border space-y-3">
-                <div class="flex justify-between text-sm font-extrabold text-white">
-                    <span>Total:</span>
-                    <span id="resumo-total" class="text-brand-400 text-base">R$ 0,00</span>
-                </div>
-                <button onclick="enviarPedido()" id="btn-finalizar" class="w-full py-3.5 bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-extrabold rounded-2xl text-sm transition active:scale-95 shadow-lg flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-check"></i> Concluir Pedido
-                </button>
-            </div>
         </div>
     </div>
 
     <script>
         const estabId = <?= $estabId ?>;
-        let lojaAbertaStatus = false;
-        const TAXA_ENTREGA = 4.00;
-        let carrinho = [];
+        let categorias = <?= json_encode($categoriasIniciais) ?>;
+        let produtos = <?= json_encode($produtosIniciais) ?>;
 
-        const formatBRL = (v) => (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const formatBRL = (val) => (parseFloat(val) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        // Consulta a API e atualiza a badge em tempo real
-        async function sincronizarStatusLoja() {
-            try {
-                const res = await fetch(`api/status_loja.php?estab=${estabId}&t=${Date.now()}`);
-                const data = await res.json();
-                
-                if (data && data.sucesso) {
-                    lojaAbertaStatus = (data.status === 1 || data.status === 'aberto' || data.aberto === true);
-                    const container = document.getElementById('container-status-loja');
-                    if (container) {
-                        if (lojaAbertaStatus) {
-                            container.innerHTML = `
-                                <span class="px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1.5 shadow-sm shadow-emerald-950/50">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Aberto agora
-                                </span>
-                            `;
-                        } else {
-                            container.innerHTML = `
-                                <span class="px-3.5 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 inline-flex items-center gap-1.5 shadow-sm shadow-red-950/50">
-                                    <span class="w-2 h-2 rounded-full bg-red-400"></span> Fechado no momento
-                                </span>
-                            `;
-                        }
-                    }
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        }
-
-        function adicionarAoCarrinho(p) {
-            const item = carrinho.find(i => i.id === p.id);
-            if (item) item.qtd++;
-            else carrinho.push({ id: p.id, nome: p.nome, preco_base: parseFloat(p.preco), qtd: 1 });
-            atualizarTotais();
-            Swal.fire({ title: 'Adicionado!', text: `${p.nome} na sacola`, icon: 'success', toast: true, position: 'bottom-end', timer: 1200, showConfirmButton: false });
-        }
-
-        function alterarQtd(idx, delta) {
-            if (carrinho[idx]) {
-                carrinho[idx].qtd += delta;
-                if (carrinho[idx].qtd <= 0) carrinho.splice(idx, 1);
-            }
-            atualizarTotais();
-            renderizarItensSacola();
-        }
-
-        function atualizarTotais() {
-            let qtd = 0, sub = 0;
-            carrinho.forEach(i => { qtd += i.qtd; sub += (i.preco_base * i.qtd); });
-            const tipo = document.querySelector('input[name="tipo_entrega"]:checked')?.value || 'delivery';
-            const taxa = (tipo === 'delivery') ? TAXA_ENTREGA : 0;
-
-            document.getElementById('qtd-itens-barra').innerText = qtd;
-            document.getElementById('total-sacola-barra').innerText = formatBRL(sub);
-            document.getElementById('resumo-total').innerText = formatBRL(sub + (sub > 0 ? taxa : 0));
-
-            const box = document.getElementById('box-endereco');
-            if (tipo === 'retirada') box.classList.add('hidden');
-            else box.classList.remove('hidden');
-        }
-
-        function renderizarItensSacola() {
-            const c = document.getElementById('lista-itens-sacola');
-            c.innerHTML = '';
-            if (carrinho.length === 0) { c.innerHTML = '<p class="text-center text-xs text-slate-500 py-6">Sacola vazia.</p>'; return; }
-            carrinho.forEach((it, idx) => {
-                const el = document.createElement('div');
-                el.className = 'p-3 bg-dark-card border border-dark-border rounded-xl flex items-center justify-between';
-                el.innerHTML = `
-                    <div><p class="text-xs font-bold text-white">${it.nome}</p><p class="text-[11px] font-mono text-brand-400">${formatBRL(it.preco_base * it.qtd)}</p></div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="alterarQtd(${idx}, -1)" class="w-6 h-6 rounded bg-white/5 text-white text-xs">-</button>
-                        <span class="text-xs font-bold text-white">${it.qtd}</span>
-                        <button onclick="alterarQtd(${idx}, 1)" class="w-6 h-6 rounded bg-white/5 text-white text-xs">+</button>
-                    </div>
-                `;
-                c.appendChild(el);
-            });
-        }
-
-        function abrirModalSacola() {
-            if (!lojaAbertaStatus) {
-                Swal.fire({
-                    title: 'Loja Fechada',
-                    text: 'Nosso estabelecimento está fechado no momento. Horário: 18:00 às 22:30.',
-                    icon: 'warning',
-                    confirmButtonColor: '#9333ea'
-                });
-                return;
-            }
-            if (carrinho.length === 0) {
-                Swal.fire('Sacola Vazia', 'Adicione itens antes.', 'info');
-                return;
-            }
-            renderizarItensSacola();
-            document.getElementById('modal-sacola').classList.remove('hidden');
-        }
-
-        function fecharModalSacola() { document.getElementById('modal-sacola').classList.add('hidden'); }
-
-        async function enviarPedido() {
-            const nome = document.getElementById('cli-nome').value.trim();
-            const wpp = document.getElementById('cli-wpp').value.trim();
-            const tipo = document.querySelector('input[name="tipo_entrega"]:checked')?.value || 'delivery';
-            const end = document.getElementById('cli-endereco').value.trim();
-            const bairro = document.getElementById('cli-bairro').value.trim();
-            const forma = document.getElementById('forma-pagamento').value;
-
-            if (!nome || !wpp) { Swal.fire('Atenção', 'Informe Nome e WhatsApp.', 'warning'); return; }
-            if (tipo === 'delivery' && (!end || !bairro)) { Swal.fire('Atenção', 'Informe Endereço e Bairro.', 'warning'); return; }
-
-            let sub = 0; carrinho.forEach(i => sub += (i.preco_base * i.qtd));
-            const taxa = (tipo === 'delivery') ? TAXA_ENTREGA : 0;
-
-            const res = await fetch('api/criar_pedido.php', {
+        async function chamarApi(payload) {
+            const res = await fetch(`../api/gerenciar_produto.php?estab=${estabId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    estabelecimento_id: estabId,
-                    cliente: { nome, whatsapp: wpp, endereco: end, bairro },
-                    tipo_entrega: tipo,
-                    taxa_entrega: taxa,
-                    subtotal: sub,
-                    total: sub + taxa,
-                    forma_pagamento: forma,
-                    itens: carrinho
-                })
+                body: JSON.stringify(payload)
             });
-            const data = await res.json();
-            if (data.sucesso) {
-                Swal.fire('Pedido Confirmado! 🎉', 'Seu pedido foi registrado.', 'success').then(() => {
-                    carrinho = [];
-                    atualizarTotais();
-                    fecharModalSacola();
-                });
-            } else {
-                Swal.fire('Erro', data.erro, 'error');
+            return res.json();
+        }
+
+        async function recarregarDados() {
+            try {
+                const [resCat, resProd] = await Promise.all([
+                    fetch(`../api/gerenciar_produto.php?estab=${estabId}&acao=categorias`),
+                    fetch(`../api/gerenciar_produto.php?estab=${estabId}&acao=produtos`)
+                ]);
+                const dadosCat = await resCat.json();
+                const dadosProd = await resProd.json();
+                if (dadosCat.sucesso) categorias = dadosCat.categorias;
+                if (dadosProd.sucesso) produtos = dadosProd.produtos;
+                renderizarProdutos();
+            } catch (e) {
+                console.error('Erro ao recarregar dados:', e);
             }
         }
 
-        sincronizarStatusLoja();
-        setInterval(sincronizarStatusLoja, 3000);
+        function renderizarProdutos() {
+            const termo = (document.getElementById('input-busca').value || '').toLowerCase().trim();
+            const container = document.getElementById('lista-categorias');
+            const estadoVazio = document.getElementById('estado-vazio');
+            container.innerHTML = '';
+
+            let totalVisivel = 0;
+
+            categorias.forEach(cat => {
+                const itensDaCat = produtos.filter(p => {
+                    const mesmaCategoria = String(p.categoria_id) === String(cat.id);
+                    const bateBusca = !termo || p.nome.toLowerCase().includes(termo);
+                    return mesmaCategoria && bateBusca;
+                });
+
+                if (itensDaCat.length === 0) return;
+                totalVisivel += itensDaCat.length;
+
+                const bloco = document.createElement('div');
+                bloco.innerHTML = `
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-brand-400 mb-2.5 px-1">${cat.nome}</h3>
+                    <div class="space-y-2.5">
+                        ${itensDaCat.map(p => cardProduto(p)).join('')}
+                    </div>
+                `;
+                container.appendChild(bloco);
+            });
+
+            estadoVazio.classList.toggle('hidden', totalVisivel > 0);
+        }
+
+        function cardProduto(p) {
+            const disponivel = String(p.disponivel) === '1';
+            return `
+                <div class="bg-dark-surface border border-dark-border rounded-2xl p-3.5 flex items-start gap-3 ${disponivel ? '' : 'opacity-50'}">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-bold text-white truncate">${escapeHtml(p.nome)}</h4>
+                        </div>
+                        ${p.descricao ? `<p class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(p.descricao)}</p>` : ''}
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="text-[11px] text-slate-500">R$</span>
+                            <input type="number" step="0.01" min="0" value="${parseFloat(p.preco).toFixed(2)}"
+                                onchange="salvarPrecoInline(${p.id}, this.value)"
+                                class="w-20 px-2 py-1 bg-dark-card border border-dark-border rounded-lg text-white text-[11px] font-bold outline-none focus:border-brand-500 transition">
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end gap-2 shrink-0">
+                        <input type="checkbox" class="switch-toggle" ${disponivel ? 'checked' : ''} onchange="toggleDisponivel(${p.id}, this.checked)" title="Disponível">
+                        <div class="flex items-center gap-1.5">
+                            <button onclick='abrirModalProduto(${JSON.stringify(p)})' class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition">
+                                <i class="fa-solid fa-pen text-[10px]"></i>
+                            </button>
+                            <button onclick="excluirProduto(${p.id}, '${escapeHtml(p.nome).replace(/'/g, "\\'")}')" class="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition">
+                                <i class="fa-solid fa-trash text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function escapeHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto ?? '';
+            return div.innerHTML;
+        }
+
+        function preencherSelectCategorias(categoriaSelecionadaId) {
+            const select = document.getElementById('produto-categoria');
+            select.innerHTML = categorias.map(c =>
+                `<option value="${c.id}" ${String(c.id) === String(categoriaSelecionadaId) ? 'selected' : ''}>${escapeHtml(c.nome)}</option>`
+            ).join('');
+        }
+
+        function abrirModalProduto(produto) {
+            document.getElementById('modal-titulo').textContent = produto ? 'Editar Item' : 'Novo Item';
+            document.getElementById('produto-id').value = produto ? produto.id : '';
+            document.getElementById('produto-nome').value = produto ? produto.nome : '';
+            document.getElementById('produto-descricao').value = produto ? (produto.descricao || '') : '';
+            document.getElementById('produto-preco').value = produto ? parseFloat(produto.preco).toFixed(2) : '';
+            preencherSelectCategorias(produto ? produto.categoria_id : (categorias[0] ? categorias[0].id : ''));
+            document.getElementById('modal-produto').classList.remove('hidden');
+        }
+
+        function fecharModalProduto() {
+            document.getElementById('modal-produto').classList.add('hidden');
+        }
+
+        async function salvarProduto() {
+            const id = document.getElementById('produto-id').value;
+            const nome = document.getElementById('produto-nome').value.trim();
+            const categoriaId = document.getElementById('produto-categoria').value;
+            const descricao = document.getElementById('produto-descricao').value.trim();
+            const preco = parseFloat(document.getElementById('produto-preco').value);
+
+            if (!nome || !categoriaId || !preco || preco <= 0) {
+                Swal.fire({ icon: 'warning', title: 'Preencha nome, categoria e um preço válido.', background: '#141021', color: '#fff' });
+                return;
+            }
+
+            const payload = {
+                acao: id ? 'editar_produto' : 'criar_produto',
+                id: id || undefined,
+                nome, categoria_id: categoriaId, descricao, preco
+            };
+
+            const resultado = await chamarApi(payload);
+            if (resultado.sucesso) {
+                fecharModalProduto();
+                await recarregarDados();
+                Swal.fire({ icon: 'success', title: resultado.mensagem, background: '#141021', color: '#fff', timer: 1500, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao salvar.', background: '#141021', color: '#fff' });
+            }
+        }
+
+        async function toggleDisponivel(id, disponivel) {
+            const resultado = await chamarApi({ acao: 'toggle_status', tipo: 'produto', id, disponivel });
+            if (resultado.sucesso) {
+                const p = produtos.find(x => String(x.id) === String(id));
+                if (p) p.disponivel = disponivel ? 1 : 0;
+                renderizarProdutos();
+            } else {
+                Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao atualizar.', background: '#141021', color: '#fff' });
+            }
+        }
+
+        async function salvarPrecoInline(id, valor) {
+            const preco = parseFloat(valor);
+            if (!preco || preco <= 0) {
+                Swal.fire({ icon: 'warning', title: 'Preço inválido.', background: '#141021', color: '#fff' });
+                renderizarProdutos();
+                return;
+            }
+            const resultado = await chamarApi({ acao: 'salvar_preco', tipo: 'produto', id, preco });
+            if (resultado.sucesso) {
+                const p = produtos.find(x => String(x.id) === String(id));
+                if (p) p.preco = preco;
+            } else {
+                Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao atualizar preço.', background: '#141021', color: '#fff' });
+                renderizarProdutos();
+            }
+        }
+
+        async function excluirProduto(id, nome) {
+            const confirmacao = await Swal.fire({
+                icon: 'warning',
+                title: `Excluir "${nome}"?`,
+                text: 'Essa ação não pode ser desfeita.',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc2626',
+                background: '#141021',
+                color: '#fff'
+            });
+            if (!confirmacao.isConfirmed) return;
+
+            const resultado = await chamarApi({ acao: 'excluir_produto', id });
+            if (resultado.sucesso) {
+                await recarregarDados();
+                Swal.fire({ icon: 'success', title: 'Item removido.', background: '#141021', color: '#fff', timer: 1300, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao excluir.', background: '#141021', color: '#fff' });
+            }
+        }
+
+        renderizarProdutos();
     </script>
+
 </body>
 </html>

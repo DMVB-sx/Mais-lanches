@@ -18,6 +18,13 @@ try {
             echo json_encode(['sucesso' => true, 'categorias' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
             exit;
         }
+
+        if ($acao === 'produtos') {
+            $stmt = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab ORDER BY categoria_id ASC, nome ASC");
+            $stmt->execute([':estab' => $estabId]);
+            echo json_encode(['sucesso' => true, 'produtos' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            exit;
+        }
     }
 
     if ($metodo === 'POST') {
@@ -55,10 +62,13 @@ try {
             $tipo = $dados['tipo'] ?? 'produto';
             $id = (int)($dados['id'] ?? 0);
             $novoStatus = !empty($dados['disponivel']) ? 1 : 0;
-            $tabela = ($tipo === 'pizza') ? 'pizza_sabores' : 'produtos';
 
-            $stmt = $pdo->prepare("UPDATE {$tabela} SET disponivel = :status WHERE id = :id");
-            $stmt->execute([':status' => $novoStatus, ':id' => $id]);
+            if ($tipo === 'pizza') {
+                $stmt = $pdo->prepare("UPDATE pizza_sabores SET disponivel = :status WHERE id = :id AND estabelecimento_id = :estab");
+            } else {
+                $stmt = $pdo->prepare("UPDATE produtos SET disponivel = :status WHERE id = :id AND estabelecimento_id = :estab");
+            }
+            $stmt->execute([':status' => $novoStatus, ':id' => $id, ':estab' => $estabId]);
 
             echo json_encode(['sucesso' => true, 'mensagem' => 'Disponibilidade atualizada!']);
             exit;
@@ -73,15 +83,59 @@ try {
                 $precoG = (float)$dados['preco_g'];
                 $precoF = (float)$dados['preco_f'];
 
-                $stmt = $pdo->prepare("UPDATE pizza_sabores SET preco_m = :pm, preco_g = :pg, preco_f = :pf WHERE id = :id");
-                $stmt->execute([':pm' => $precoM, ':pg' => $precoG, ':pf' => $precoF, ':id' => $id]);
+                $stmt = $pdo->prepare("UPDATE pizza_sabores SET preco_m = :pm, preco_g = :pg, preco_f = :pf WHERE id = :id AND estabelecimento_id = :estab");
+                $stmt->execute([':pm' => $precoM, ':pg' => $precoG, ':pf' => $precoF, ':id' => $id, ':estab' => $estabId]);
             } else {
                 $preco = (float)$dados['preco'];
-                $stmt = $pdo->prepare("UPDATE produtos SET preco = :preco WHERE id = :id");
-                $stmt->execute([':preco' => $preco, ':id' => $id]);
+                $stmt = $pdo->prepare("UPDATE produtos SET preco = :preco WHERE id = :id AND estabelecimento_id = :estab");
+                $stmt->execute([':preco' => $preco, ':id' => $id, ':estab' => $estabId]);
             }
 
             echo json_encode(['sucesso' => true, 'mensagem' => 'Preço atualizado com sucesso!']);
+            exit;
+        }
+
+        if ($acao === 'editar_produto') {
+            $id = (int)($dados['id'] ?? 0);
+            $nome = trim($dados['nome'] ?? '');
+            $categoriaId = (int)($dados['categoria_id'] ?? 0);
+            $descricao = trim($dados['descricao'] ?? '');
+            $preco = (float)($dados['preco'] ?? 0);
+
+            if ($id <= 0 || empty($nome) || $categoriaId <= 0 || $preco <= 0) {
+                echo json_encode(['sucesso' => false, 'erro' => 'Preencha nome, categoria e preço válido.']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("
+                UPDATE produtos
+                SET nome = :nome, descricao = :descricao, categoria_id = :categoria_id, preco = :preco
+                WHERE id = :id AND estabelecimento_id = :estab
+            ");
+            $stmt->execute([
+                ':nome' => $nome,
+                ':descricao' => $descricao,
+                ':categoria_id' => $categoriaId,
+                ':preco' => $preco,
+                ':id' => $id,
+                ':estab' => $estabId
+            ]);
+
+            echo json_encode(['sucesso' => true, 'mensagem' => 'Produto atualizado com sucesso!']);
+            exit;
+        }
+
+        if ($acao === 'excluir_produto') {
+            $id = (int)($dados['id'] ?? 0);
+            if ($id <= 0) {
+                echo json_encode(['sucesso' => false, 'erro' => 'Produto inválido.']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("DELETE FROM produtos WHERE id = :id AND estabelecimento_id = :estab");
+            $stmt->execute([':id' => $id, ':estab' => $estabId]);
+
+            echo json_encode(['sucesso' => true, 'mensagem' => 'Produto removido com sucesso!']);
             exit;
         }
     }
