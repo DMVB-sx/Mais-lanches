@@ -29,20 +29,10 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gestão de Cardápio - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { 400: '#c084fc', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce' },
-                        dark: { base: '#0B0914', surface: '#141021', card: '#1C172E', border: 'rgba(255, 255, 255, 0.08)' }
-                    },
-                    fontFamily: { sans: ['Inter', 'sans-serif'] }
-                }
-            }
-        }
-    </script>
+    <?php
+        require_once __DIR__ . '/../includes/tema.php';
+        tema_imprimirTailwindConfig($estab);
+    ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -53,6 +43,14 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
         .switch-toggle:checked { background: #16a34a; }
         .switch-toggle::before { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: .2s; }
         .switch-toggle:checked::before { left: 18px; }
+        .categoria-header { position: sticky; top: 57px; z-index: 20; }
+        .aba-categoria { scroll-snap-align: start; }
+        .aba-categoria.ativa { background: linear-gradient(90deg, #9333ea, #c026d3); color: #fff; border-color: transparent; }
+        .categoria-conteudo { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .25s ease; }
+        .categoria-conteudo.recolhido { grid-template-rows: 0fr; }
+        .categoria-conteudo > div { overflow: hidden; }
+        .chevron-categoria { transition: transform .2s; }
+        .chevron-categoria.recolhido { transform: rotate(-90deg); }
     </style>
 </head>
 <body class="min-h-screen bg-dark-base text-slate-100 flex flex-col antialiased">
@@ -77,7 +75,7 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
     </header>
 
     <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6">
-        <div id="busca-container" class="mb-4">
+        <div id="busca-container" class="mb-3">
             <div class="relative">
                 <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
                     <i class="fa-solid fa-magnifying-glass text-xs"></i>
@@ -86,7 +84,9 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-        <div id="lista-categorias" class="space-y-6"></div>
+        <div id="abas-categorias" class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-3 mb-1 -mx-1 px-1"></div>
+
+        <div id="lista-categorias" class="space-y-4"></div>
 
         <div id="estado-vazio" class="hidden text-center py-16 text-slate-500">
             <i class="fa-solid fa-box-open text-3xl mb-3"></i>
@@ -165,11 +165,54 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             }
         }
 
+        let categoriasRecolhidas = new Set();
+
+        function renderizarAbas() {
+            const abasContainer = document.getElementById('abas-categorias');
+            const contagens = {};
+            produtos.forEach(p => { contagens[p.categoria_id] = (contagens[p.categoria_id] || 0) + 1; });
+
+            abasContainer.innerHTML = `
+                <button onclick="irParaTopo()" class="aba-categoria shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-dark-surface border border-dark-border text-slate-300 hover:bg-white/10 transition">
+                    <i class="fa-solid fa-list-ul mr-1"></i> Todas
+                </button>
+                ${categorias.map(cat => `
+                    <button onclick="irParaCategoria(${cat.id})" class="aba-categoria shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-dark-surface border border-dark-border text-slate-300 hover:bg-white/10 transition">
+                        ${escapeHtml(cat.nome)} <span class="opacity-60">(${contagens[cat.id] || 0})</span>
+                    </button>
+                `).join('')}
+            `;
+        }
+
+        function irParaTopo() {
+            document.getElementById('busca-container').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function irParaCategoria(catId) {
+            categoriasRecolhidas.delete(catId);
+            renderizarProdutos();
+            requestAnimationFrame(() => {
+                const alvo = document.getElementById(`categoria-bloco-${catId}`);
+                if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
+        function toggleCategoriaColapso(catId) {
+            if (categoriasRecolhidas.has(catId)) {
+                categoriasRecolhidas.delete(catId);
+            } else {
+                categoriasRecolhidas.add(catId);
+            }
+            renderizarProdutos();
+        }
+
         function renderizarProdutos() {
             const termo = (document.getElementById('input-busca').value || '').toLowerCase().trim();
             const container = document.getElementById('lista-categorias');
             const estadoVazio = document.getElementById('estado-vazio');
             container.innerHTML = '';
+
+            renderizarAbas();
 
             let totalVisivel = 0;
 
@@ -183,11 +226,24 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
                 if (itensDaCat.length === 0) return;
                 totalVisivel += itensDaCat.length;
 
+                const recolhido = categoriasRecolhidas.has(cat.id);
+                const disponiveisNaCat = itensDaCat.filter(p => String(p.disponivel) === '1').length;
+
                 const bloco = document.createElement('div');
+                bloco.id = `categoria-bloco-${cat.id}`;
+                bloco.className = 'bg-dark-surface/40 border border-dark-border rounded-2xl p-2.5 sm:p-3';
                 bloco.innerHTML = `
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-brand-400 mb-2.5 px-1">${cat.nome}</h3>
-                    <div class="space-y-2.5">
-                        ${itensDaCat.map(p => cardProduto(p)).join('')}
+                    <button onclick="toggleCategoriaColapso(${cat.id})" class="categoria-header w-full flex items-center justify-between gap-2 bg-dark-base/95 backdrop-blur-sm rounded-xl px-2.5 py-2 -mt-0.5">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="fa-solid fa-chevron-down chevron-categoria ${recolhido ? 'recolhido' : ''} text-brand-400 text-[10px]"></i>
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-brand-400 truncate">${escapeHtml(cat.nome)}</h3>
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 bg-white/5 px-2 py-0.5 rounded-full shrink-0">${disponiveisNaCat}/${itensDaCat.length} ativos</span>
+                    </button>
+                    <div class="categoria-conteudo ${recolhido ? 'recolhido' : ''}">
+                        <div class="space-y-2.5 pt-2.5">
+                            ${itensDaCat.map(p => cardProduto(p)).join('')}
+                        </div>
                     </div>
                 `;
                 container.appendChild(bloco);

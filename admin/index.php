@@ -28,22 +28,12 @@ if ($estab) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Painel Drilavy</title>
+    <title>Painel <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce' },
-                        dark: { base: '#0B0914', surface: '#141021', card: '#1C172E', border: 'rgba(255, 255, 255, 0.08)' }
-                    },
-                    fontFamily: { sans: ['Inter', 'sans-serif'] }
-                }
-            }
-        }
-    </script>
+    <?php
+        require_once __DIR__ . '/../includes/tema.php';
+        tema_imprimirTailwindConfig($estab);
+    ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -63,9 +53,14 @@ if ($estab) {
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
             
             <div class="flex items-center gap-3">
+                <?php $logoAdmin = tema_logoSrc($estab, '../'); ?>
                 <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-fuchsia-500 p-0.5 shadow-lg flex items-center justify-center shrink-0">
                     <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
-                        <img src="../assets/img/logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='../assets/img/logo.jpg';">
+                        <?php if ($logoAdmin): ?>
+                            <img src="<?= htmlspecialchars($logoAdmin) ?>" alt="Logo" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <img src="../assets/img/logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='../assets/img/logo.jpg';">
+                        <?php endif; ?>
                     </div>
                 </div>
                 <h1 class="text-sm font-extrabold text-white tracking-tight flex items-center gap-2">
@@ -93,6 +88,11 @@ if ($estab) {
                 <a href="cardapio.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5">
                     <i class="fa-solid fa-utensils text-xs"></i>
                     <span class="hidden sm:inline">Cardápio</span>
+                </a>
+
+                <a href="configuracoes.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-palette text-xs"></i>
+                    <span class="hidden sm:inline">Visual</span>
                 </a>
 
                 <a href="logout.php" title="Sair" class="w-8 h-8 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 flex items-center justify-center transition">

@@ -31,32 +31,10 @@ if (isset($estab['status'])) {
     <title><?= htmlspecialchars($estab['nome']) ?> - Cardápio & Delivery</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            500: '#a855f7',
-                            600: '#9333ea',
-                            700: '#7e22ce',
-                            900: '#3b0764',
-                        },
-                        dark: {
-                            base: '#0B0914',
-                            surface: '#141021',
-                            card: '#1C172E',
-                            border: 'rgba(255, 255, 255, 0.08)'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <?php
+        require_once __DIR__ . '/includes/tema.php';
+        tema_imprimirTailwindConfig($estab, ['Plus Jakarta Sans', 'Inter', 'sans-serif']);
+    ?>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -127,14 +105,23 @@ if (isset($estab['status'])) {
         <header class="relative px-4 pt-8 pb-5 text-center bg-gradient-to-b from-purple-950/40 via-dark-surface to-dark-base border-b border-white/5">
             <div class="flex flex-col items-center">
                 
-                <!-- Selo da Logo Oficial Drilavy -->
+                <!-- Selo da Logo do Estabelecimento -->
+                <?php $logoEstab = tema_logoSrc($estab); ?>
                 <div class="relative w-28 h-28 rounded-full bg-gradient-to-tr from-brand-600 via-fuchsia-500 to-purple-400 p-[3px] shadow-2xl shadow-purple-950/90 mb-3 flex items-center justify-center">
                     <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
-                        <img src="assets/img/logo.png" 
-                             alt="Logo Drilavy" 
-                             class="w-full h-full object-cover" 
-                             onerror="this.onerror=null; this.src='assets/img/logo.jpg'; this.onerror=() => { this.style.display='none'; document.getElementById('fallback-icon').style.display='block'; };">
-                        <span id="fallback-icon" class="text-4xl hidden">🍔</span>
+                        <?php if ($logoEstab): ?>
+                            <img src="<?= htmlspecialchars($logoEstab) ?>"
+                                 alt="Logo <?= htmlspecialchars($estab['nome']) ?>"
+                                 class="w-full h-full object-cover"
+                                 onerror="this.style.display='none'; document.getElementById('fallback-icon').style.display='block';">
+                            <span id="fallback-icon" class="text-4xl hidden">🍔</span>
+                        <?php else: ?>
+                            <img src="assets/img/logo.png"
+                                 alt="Logo <?= htmlspecialchars($estab['nome']) ?>"
+                                 class="w-full h-full object-cover"
+                                 onerror="this.onerror=null; this.src='assets/img/logo.jpg'; this.onerror=() => { this.style.display='none'; document.getElementById('fallback-icon').style.display='block'; };">
+                            <span id="fallback-icon" class="text-4xl hidden">🍔</span>
+                        <?php endif; ?>
                     </div>
                 </div>
 

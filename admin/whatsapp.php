@@ -4,14 +4,23 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../config/conexao.php';
 
 $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
+
+$stmtEstab = $pdo->prepare("SELECT * FROM estabelecimentos WHERE id = :id LIMIT 1");
+$stmtEstab->execute([':id' => $estabId]);
+$estab = $stmtEstab->fetch(PDO::FETCH_ASSOC);
+$nomeEstab = $estab['nome'] ?? 'Drilavy Lanchonete e Pizzaria';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conectar WhatsApp - Drilavy</title>
+    <title>Conectar WhatsApp - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <?php
+        require_once __DIR__ . '/../includes/tema.php';
+        tema_imprimirTailwindConfig($estab);
+    ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="min-h-screen bg-[#0B0914] text-white flex flex-col items-center justify-center p-4">
@@ -42,7 +51,7 @@ $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
     <script>
         async function checarStatus() {
             try {
-                const res = await fetch('http://localhost:3000/status');
+                const res = await fetch('../api/bot_proxy.php?rota=status');
                 const data = await res.json();
 
                 const boxStatus = document.getElementById('box-status');

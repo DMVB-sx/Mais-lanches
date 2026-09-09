@@ -13,6 +13,22 @@ app.use(cors());
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ limit: '30mb', extended: true }));
 
+// Chave compartilhada entre o painel PHP e este serviço. Configure a
+// variável de ambiente BOT_SECRET no servidor de produção — sem ela,
+// qualquer pessoa que descobrisse a porta 3000 poderia mandar mensagens
+// ou puxar a agenda de contatos pelo número da loja.
+const BOT_SECRET = process.env.BOT_SECRET || 'troque-esta-chave-antes-de-publicar';
+if (!process.env.BOT_SECRET) {
+    console.warn('⚠️  BOT_SECRET não definido — usando chave padrão insegura. Configure a variável de ambiente antes de publicar em produção.');
+}
+
+app.use((req, res, next) => {
+    if (req.get('x-bot-secret') !== BOT_SECRET) {
+        return res.status(401).json({ sucesso: false, erro: 'Não autorizado.' });
+    }
+    next();
+});
+
 let sock = null;
 let qrCodeData = null;
 let connectionStatus = 'desconectado';

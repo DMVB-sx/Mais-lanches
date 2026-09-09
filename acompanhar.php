@@ -4,7 +4,7 @@ require_once __DIR__ . '/config/conexao.php';
 $pedidoId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $stmt = $pdo->prepare("
-    SELECT p.*, e.nome as estab_nome, e.logo_url, e.whatsapp as estab_whatsapp 
+    SELECT p.*, e.nome as estab_nome, e.logo_url, e.whatsapp as estab_whatsapp, e.cor_primaria, e.cor_secundaria
     FROM pedidos p
     INNER JOIN estabelecimentos e ON p.estabelecimento_id = e.id
     WHERE p.id = :id
@@ -33,32 +33,10 @@ $itens = $stmtItens->fetchAll(PDO::FETCH_ASSOC);
     <title>Acompanhar Pedido - <?= htmlspecialchars($pedido['estab_nome']) ?></title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            500: '#a855f7',
-                            600: '#9333ea',
-                            700: '#7e22ce',
-                            900: '#3b0764',
-                        },
-                        dark: {
-                            base: '#0B0914',
-                            surface: '#141021',
-                            card: '#1C172E',
-                            border: 'rgba(255, 255, 255, 0.08)'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <?php
+        require_once __DIR__ . '/includes/tema.php';
+        tema_imprimirTailwindConfig($pedido, ['Plus Jakarta Sans', 'Inter', 'sans-serif']);
+    ?>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,8 +59,9 @@ $itens = $stmtItens->fetchAll(PDO::FETCH_ASSOC);
         <header class="bg-dark-surface border border-dark-border rounded-3xl p-5 text-center shadow-xl shadow-black/40">
             <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-brand-600 to-fuchsia-500 p-[2px] shadow-lg shadow-purple-950/60 mb-3">
                 <div class="w-full h-full bg-dark-base rounded-[14px] flex items-center justify-center overflow-hidden">
-                    <?php if (!empty($pedido['logo_url']) && file_exists($pedido['logo_url'])): ?>
-                        <img src="<?= htmlspecialchars($pedido['logo_url']) ?>" alt="Logo" class="w-full h-full object-cover">
+                    <?php $logoAcompanhar = tema_logoSrc($pedido); ?>
+                    <?php if ($logoAcompanhar): ?>
+                        <img src="<?= htmlspecialchars($logoAcompanhar) ?>" alt="Logo" class="w-full h-full object-cover">
                     <?php else: ?>
                         <span class="text-2xl">🍔</span>
                     <?php endif; ?>

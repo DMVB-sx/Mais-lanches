@@ -5,6 +5,11 @@ require_once __DIR__ . '/../config/conexao.php';
 
 $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
 
+$stmtEstab = $pdo->prepare("SELECT * FROM estabelecimentos WHERE id = :id LIMIT 1");
+$stmtEstab->execute([':id' => $estabId]);
+$estab = $stmtEstab->fetch(PDO::FETCH_ASSOC);
+$nomeEstab = $estab['nome'] ?? 'Drilavy Lanchonete e Pizzaria';
+
 // Busca clientes do banco de dados
 $stmt = $pdo->prepare("
     SELECT 
@@ -26,8 +31,12 @@ $clientesBanco = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transmissão de Promoções - Drilavy</title>
+    <title>Transmissão de Promoções - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <?php
+        require_once __DIR__ . '/../includes/tema.php';
+        tema_imprimirTailwindConfig($estab);
+    ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -191,7 +200,7 @@ http://localhost/Mais-lanches/cardapio.php?estab=1</textarea>
                     didOpen: () => Swal.showLoading()
                 });
 
-                const res = await fetch('http://localhost:3000/contatos-agenda');
+                const res = await fetch('../api/bot_proxy.php?rota=contatos-agenda');
                 const data = await res.json();
 
                 if (data.sucesso && data.contatos && data.contatos.length > 0) {
@@ -305,7 +314,7 @@ http://localhost/Mais-lanches/cardapio.php?estab=1</textarea>
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Disparando na fila segura...';
 
             try {
-                const res = await fetch('http://localhost:3000/disparar-transmissao', {
+                const res = await fetch('../api/bot_proxy.php?rota=disparar-transmissao', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
