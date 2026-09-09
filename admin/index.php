@@ -58,7 +58,7 @@ if ($estab) {
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
 
-    <!-- Top Header Clean -->
+    <!-- Top Header -->
     <header class="sticky top-0 z-40 bg-dark-surface/90 backdrop-blur-md border-b border-dark-border px-4 sm:px-6 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
             
@@ -90,7 +90,6 @@ if ($estab) {
                     <span class="hidden sm:inline">WhatsApp</span>
                 </a>
 
-                <!-- LINK CORRETO: Abre a tela de gerenciar produtos/estoque dentro do admin -->
                 <a href="cardapio.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5">
                     <i class="fa-solid fa-utensils text-xs"></i>
                     <span class="hidden sm:inline">Cardápio</span>
@@ -104,10 +103,11 @@ if ($estab) {
         </div>
     </header>
 
-    <!-- Kanban Board Direto -->
+    <!-- Kanban Board -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 overflow-x-auto">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 min-w-[300px]">
             
+            <!-- Novos Pedidos -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -119,6 +119,7 @@ if ($estab) {
                 <div id="col-novo" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
+            <!-- Na Cozinha / Preparo -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -130,6 +131,7 @@ if ($estab) {
                 <div id="col-em_preparo" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
+            <!-- Em Entrega / Balcão -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -141,6 +143,7 @@ if ($estab) {
                 <div id="col-saiu_entrega" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
+            <!-- Finalizados Hoje -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -181,13 +184,13 @@ if ($estab) {
             const vaiAbrir = !lojaAberta;
             
             const confirmacao = await Swal.fire({
-                title: vaiAbrir ? 'Abrir o Estabelecimento? 🟢' : 'Fechar o Estabelecimento? 🔴',
+                title: vaiAbrir ? 'Abrir a Loja? 🟢' : 'Fechar a Loja? 🔴',
                 html: vaiAbrir 
-                    ? 'Ao abrir, os clientes poderão <b>montar e enviar pedidos imediatamente</b> pelo cardápio.' 
-                    : 'Ao fechar, o cardápio ficará <b>bloqueado para novos pedidos</b>.',
+                    ? 'O cardápio será liberado e os clientes poderão fazer pedidos normalmente.' 
+                    : 'O cardápio será pausado para novos pedidos.',
                 icon: vaiAbrir ? 'question' : 'warning',
                 showCancelButton: true,
-                confirmButtonText: vaiAbrir ? 'Sim, Abrir Loja' : 'Sim, Fechar Loja',
+                confirmButtonText: vaiAbrir ? 'Sim, Abrir' : 'Sim, Fechar',
                 cancelButtonText: 'Cancelar',
                 confirmButtonColor: vaiAbrir ? '#10b981' : '#ef4444',
                 cancelButtonColor: '#334155'
@@ -212,7 +215,7 @@ if ($estab) {
 
                     Swal.fire({
                         title: lojaAberta ? 'Loja Aberta! 🎉' : 'Loja Fechada! 🔒',
-                        text: lojaAberta ? 'O cardápio já está liberado para os clientes.' : 'O cardápio foi bloqueado.',
+                        text: lojaAberta ? 'O cardápio está aberto para novos pedidos.' : 'O cardápio foi fechado.',
                         icon: 'success',
                         toast: true,
                         position: 'top-end',
@@ -261,21 +264,21 @@ if ($estab) {
             pedidos.forEach(p => {
                 const st = (p.status || 'novo').toLowerCase();
                 
-                // Se o pedido foi arquivado/removido da tela, não exibe no Kanban
+                // Ignora pedidos arquivados (removidos da tela)
                 if (st === 'arquivado') return;
 
-                const colunaDestino = cols[st] || cols['novo'];
+                // Garante que só vá para uma coluna válida
+                const colunaDestino = cols[st];
+                if (!colunaDestino) return;
 
-                if (counts[st] !== undefined) counts[st]++;
+                counts[st]++;
 
                 const pedId = parseInt(p.id);
                 if (!primeiraCarga && st === 'novo' && !ultimosPedidosIds.has(pedId)) {
                     temNovoPedido = true;
                 }
 
-                if (colunaDestino) {
-                    colunaDestino.appendChild(criarCardPedido(p));
-                }
+                colunaDestino.appendChild(criarCardPedido(p));
             });
 
             if (temNovoPedido) {
@@ -337,8 +340,8 @@ if ($estab) {
                 `;
             } else if (st === 'em_preparo') {
                 botoesAcao = `
-                    <button onclick="mudarStatusPedido(${p.id}, 'saiu_entrega')" class="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
-                        <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-bag-shopping'}"></i> ${isDelivery ? 'Despachar Entrega' : 'Pronto para Retirada'}
+                    <button onclick="despacharOuAvisarPronto(${p.id}, '${isDelivery ? 'delivery' : 'retirada'}', '${encodeURIComponent(p.cliente_nome || '')}', '${encodeURIComponent(p.cliente_whatsapp || '')}')" class="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-store'}"></i> ${isDelivery ? 'Despachar Entrega' : 'Pronto para Retirada'}
                     </button>
                 `;
             } else if (st === 'saiu_entrega') {
@@ -349,21 +352,22 @@ if ($estab) {
                 `;
             }
 
+            const nomeClienteSeguro = (p.cliente_nome || 'Cliente').replace(/'/g, "\\'");
+
             card.innerHTML = `
                 <div class="flex items-start justify-between gap-2 border-b border-dark-border pb-2.5">
                     <div>
                         <div class="flex items-center gap-1.5">
-                            <span class="font-extrabold text-xs text-white">#${p.id}</span>
                             <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isDelivery ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
-                                <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-store'} text-[9px]"></i> ${isDelivery ? 'Delivery' : 'Retirada'}
+                                <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-store'} text-[9px]"></i> ${isDelivery ? 'Delivery' : 'Retirada no Balcão'}
                             </span>
                         </div>
-                        <p class="text-xs font-bold text-slate-200 mt-1">${p.cliente_nome || 'Cliente'}</p>
+                        <p class="text-sm font-extrabold text-white mt-1">${p.cliente_nome || 'Cliente'}</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-[10px] text-slate-400 font-mono font-bold">${dataFormatada}</span>
-                        <!-- Botão de Remover Card da Tela (Arquivar) -->
-                        <button onclick="removerPedidoDaTela(${p.id})" title="Remover da tela" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 flex items-center justify-center transition">
+                        <!-- Botão de Limpar da Tela -->
+                        <button onclick="removerPedidoDaTela(${p.id}, '${nomeClienteSeguro}')" title="Limpar pedido da tela" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 flex items-center justify-center transition">
                             <i class="fa-solid fa-xmark text-[11px]"></i>
                         </button>
                     </div>
@@ -382,6 +386,12 @@ if ($estab) {
                     ${isDelivery && p.cliente_endereco ? `
                         <div class="pt-1 text-[10px] text-slate-400 border-t border-white/5">
                             <i class="fa-solid fa-location-dot text-brand-400"></i> ${p.cliente_endereco}${p.cliente_bairro ? `, ${p.cliente_bairro}` : ''} ${p.cliente_complemento ? `(${p.cliente_complemento})` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${!isDelivery ? `
+                        <div class="pt-1 text-[10px] text-amber-300 border-t border-white/5">
+                            <i class="fa-solid fa-store text-amber-400"></i> O cliente irá retirar no balcão
                         </div>
                     ` : ''}
 
@@ -415,15 +425,52 @@ if ($estab) {
             } catch (err) {}
         }
 
-        // Remove o card da tela arquivando no banco (sem deletar os dados)
-        async function removerPedidoDaTela(pedidoId) {
+        // Despacha ou avisa que está pronto no balcão, com mensagem personalizada para o WhatsApp
+        async function despacharOuAvisarPronto(pedidoId, tipoEntrega, nomeEncoded, wppEncoded) {
+            const nome = decodeURIComponent(nomeEncoded);
+            const wpp = decodeURIComponent(wppEncoded).replace(/\D/g, '');
+            const isDelivery = (tipoEntrega === 'delivery');
+
+            // Primeiro atualiza o status para a coluna 3 (saiu_entrega)
+            await mudarStatusPedido(pedidoId, 'saiu_entrega');
+
+            // Mensagem personalizada conforme o tipo de entrega
+            let textoMsg = '';
+            if (isDelivery) {
+                textoMsg = `Olá, *${nome}*! Seu pedido acabou de sair para entrega e está a caminho da sua casa! 🛵💨`;
+            } else {
+                textoMsg = `Olá, *${nome}*! Seu pedido já está prontinho e te aguardando para retirada no nosso balcão! 🍔🍕`;
+            }
+
+            if (wpp) {
+                const linkWpp = `https://api.whatsapp.com/send?phone=55${wpp}&text=${encodeURIComponent(textoMsg)}`;
+                
+                Swal.fire({
+                    title: isDelivery ? 'Pedido Despachado!' : 'Pronto para Retirada!',
+                    text: isDelivery ? 'Deseja avisar o cliente no WhatsApp que o pedido saiu?' : 'Deseja avisar o cliente no WhatsApp que já pode buscar no balcão?',
+                    icon: 'success',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Avisar no WhatsApp',
+                    cancelButtonText: 'Não precisa avisar',
+                    confirmButtonColor: '#10b981',
+                    cancelButtonColor: '#334155'
+                }).then((r) => {
+                    if (r.isConfirmed) {
+                        window.open(linkWpp, '_blank');
+                    }
+                });
+            }
+        }
+
+        // Remove o card da tela de forma clara e sem termos técnicos
+        async function removerPedidoDaTela(pedidoId, nomeCliente) {
             const conf = await Swal.fire({
-                title: `Remover Pedido #${pedidoId} da tela?`,
-                text: 'O pedido sairá do painel mas continuará salvo no seu banco de dados.',
+                title: `Limpar pedido de ${nomeCliente}?`,
+                text: 'O pedido sairá do painel para manter sua tela organizada. Ele continuará registrado no seu histórico de vendas.',
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Sim, Remover',
-                cancelButtonText: 'Cancelar',
+                confirmButtonText: 'Sim, Limpar',
+                cancelButtonText: 'Voltar',
                 confirmButtonColor: '#9333ea',
                 cancelButtonColor: '#334155'
             });
