@@ -15,12 +15,23 @@ if (!$estab) {
     die("<div style='min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0B0914; color:#fff; font-family:sans-serif;'><h2>Estabelecimento indisponível.</h2></div>");
 }
 
-// Identifica corretamente se está aberto (seja por coluna status 'aberto' ou aberto = 1)
+// Identifica se a loja está aberta inicialmente
 $lojaAbertaInicial = false;
 if (isset($estab['status'])) {
     $lojaAbertaInicial = ($estab['status'] === 'aberto' || $estab['status'] === '1' || $estab['status'] === 1);
 } elseif (isset($estab['aberto'])) {
     $lojaAbertaInicial = ((int)$estab['aberto'] === 1);
+}
+
+// Busca o produto marcado como destaque da semana/dia (se existir)
+$especialDoDia = null;
+try {
+    $stmtDestaque = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab AND destaque_dia = 1 LIMIT 1");
+    $stmtDestaque->execute([':estab' => $estabId]);
+    $especialDoDia = $stmtDestaque->fetch(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Caso a coluna ainda não tenha sido criada no banco
+    $especialDoDia = null;
 }
 ?>
 <!DOCTYPE html>
@@ -32,8 +43,12 @@ if (isset($estab['status'])) {
 
     <script src="https://cdn.tailwindcss.com"></script>
     <?php
-        require_once __DIR__ . '/includes/tema.php';
-        tema_imprimirTailwindConfig($estab, ['Plus Jakarta Sans', 'Inter', 'sans-serif']);
+        if (file_exists(__DIR__ . '/includes/tema.php')) {
+            require_once __DIR__ . '/includes/tema.php';
+            if (function_exists('tema_imprimirTailwindConfig')) {
+                tema_imprimirTailwindConfig($estab, ['Plus Jakarta Sans', 'Inter', 'sans-serif']);
+            }
+        }
     ?>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -105,11 +120,13 @@ if (isset($estab['status'])) {
         <header class="relative px-4 pt-8 pb-5 text-center bg-gradient-to-b from-purple-950/40 via-dark-surface to-dark-base border-b border-white/5">
             <div class="flex flex-col items-center">
                 
-                <!-- Selo da Logo do Estabelecimento -->
-                <?php $logoEstab = tema_logoSrc($estab); ?>
+                <!-- Logo -->
                 <div class="relative w-28 h-28 rounded-full bg-gradient-to-tr from-brand-600 via-fuchsia-500 to-purple-400 p-[3px] shadow-2xl shadow-purple-950/90 mb-3 flex items-center justify-center">
                     <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
-                        <?php if ($logoEstab): ?>
+                        <?php 
+                            $logoEstab = (function_exists('tema_logoSrc')) ? tema_logoSrc($estab) : null;
+                            if ($logoEstab): 
+                        ?>
                             <img src="<?= htmlspecialchars($logoEstab) ?>"
                                  alt="Logo <?= htmlspecialchars($estab['nome']) ?>"
                                  class="w-full h-full object-cover"
@@ -135,7 +152,7 @@ if (isset($estab['status'])) {
                     </span>
                 </div>
 
-                <!-- Banner Informativo com Horário Corrigido -->
+                <!-- Banner Informativo de Horário -->
                 <div id="banner-fechado" class="<?= $lojaAbertaInicial ? 'hidden' : '' ?> mt-3.5 w-full bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-xs text-amber-300 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-clock text-amber-400"></i>
                     <span>Horário de funcionamento: <strong>18:00 às 22:30</strong></span>
@@ -143,8 +160,34 @@ if (isset($estab['status'])) {
             </div>
         </header>
 
+        <!-- Banner de Destaque Especial do Dia / Semana -->
+        <?php if ($especialDoDia): ?>
+        <div class="px-4 pt-4">
+            <div class="relative overflow-hidden bg-gradient-to-r from-purple-950/80 via-dark-surface to-[#1F1635] border border-brand-500/40 rounded-3xl p-4 shadow-xl flex items-center justify-between gap-3 group">
+                <div class="space-y-1 flex-1 pr-1 z-10">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/20 text-brand-300 border border-brand-500/30 animate-pulse">
+                        <i class="fa-solid fa-star text-amber-400 text-[9px]"></i> Especial da Semana
+                    </span>
+                    <h3 class="text-sm font-extrabold text-white mt-1"><?= htmlspecialchars($especialDoDia['nome']) ?></h3>
+                    <?php if (!empty($especialDoDia['descricao'])): ?>
+                        <p class="text-xs text-slate-400 line-clamp-2"><?= htmlspecialchars($especialDoDia['descricao']) ?></p>
+                    <?php endif; ?>
+                    <p class="text-sm font-black text-brand-400 pt-0.5">
+                        R$ <?= number_format($especialDoDia['preco'], 2, ',', '.') ?>
+                    </p>
+                </div>
+                <button type="button" onclick="clicouNoProduto(<?= (int)$especialDoDia['id'] ?>)" class="z-10 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-500 hover:to-fuchsia-500 text-white font-extrabold rounded-2xl text-xs transition active:scale-95 shadow-lg shrink-0 flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Quero Este!
+                </button>
+                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 pointer-events-none select-none">
+                    ⭐
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Grade de Categorias com Emojis -->
-        <div class="sticky top-0 z-40 bg-dark-base/95 backdrop-blur-md border-b border-white/5 py-3.5 px-4">
+        <div class="sticky top-0 z-40 bg-dark-base/95 backdrop-blur-md border-b border-white/5 py-3.5 px-4 mt-2">
             <nav class="flex flex-wrap gap-2 justify-center" id="nav-categorias"></nav>
         </div>
 
@@ -366,7 +409,7 @@ if (isset($estab['status'])) {
         </div>
     </div>
 
-    <!-- Script com Sincronização em Tempo Real -->
+    <!-- Script de Funcionamento -->
     <script>
         const estabId = <?= $estab['id'] ?>;
         const taxaPadraoEstab = <?= (float)$estab['taxa_entrega_padrao'] ?>;
@@ -473,7 +516,7 @@ if (isset($estab['status'])) {
                     cat.produtos.forEach(p => produtosCatalogo.push(p));
                 });
 
-                if (cardapioCompleto.length > 0) {
+                if (cardapioCompleto.length > 0 && !categoriaAtivaId) {
                     categoriaAtivaId = cardapioCompleto[0].categoria_id;
                 }
 
@@ -553,16 +596,26 @@ if (isset($estab['status'])) {
             `;
         }
 
-        function clicouNoProduto(id) {
+        async function clicouNoProduto(id) {
             if (!lojaEstaAberta) {
                 avisoLojaFechada();
                 return;
             }
 
-            const prod = produtosCatalogo.find(p => p.id == id);
+            let prod = produtosCatalogo.find(p => p.id == id);
+
+            // Se for o especial do dia e o catálogo ainda estiver carregando, busca diretamente
+            if (!prod) {
+                try {
+                    const res = await fetch(`api/produtos.php?estab=${estabId}&id=${id}`);
+                    const data = await res.json();
+                    if (data.produto) prod = data.produto;
+                } catch(e) {}
+            }
+
             if (!prod) return;
 
-            if (prod.categoria_id == 5 || prod.nome.toLowerCase().includes('pizza')) {
+            if (prod.categoria_id == 5 || (prod.nome && prod.nome.toLowerCase().includes('pizza'))) {
                 abrirMontadorPizza(prod);
             } else if (prod.grupos_adicionais && prod.grupos_adicionais.length > 0) {
                 abrirModalCustomizacao(prod);

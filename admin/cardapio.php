@@ -1,6 +1,6 @@
 <?php
 // admin/cardapio.php — Gestão de cardápio (produtos): criar, editar, excluir,
-// marcar disponível/indisponível e ajustar preço.
+// marcar disponível/indisponível, ajustar preço e definir destaque do dia/semana.
 require_once __DIR__ . '/auth.php';
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
@@ -14,7 +14,7 @@ $stmtEstab->execute([':id' => $estabId]);
 $estab = $stmtEstab->fetch(PDO::FETCH_ASSOC);
 $nomeEstab = $estab['nome'] ?? 'Drilavy Lanchonete e Pizzaria';
 
-$stmtCat = $pdo->prepare("SELECT id, nome FROM categorias WHERE estabelecimento_id = :estab ORDER BY ordem ASC");
+$stmtCat = $pdo->prepare("SELECT id, nome FROM categorias WHERE estabelecimento_id = :estab ORDER BY ordem ASC, id ASC");
 $stmtCat->execute([':estab' => $estabId]);
 $categoriasIniciais = $stmtCat->fetchAll(PDO::FETCH_ASSOC);
 
@@ -30,8 +30,12 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
     <title>Gestão de Cardápio - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <?php
-        require_once __DIR__ . '/../includes/tema.php';
-        tema_imprimirTailwindConfig($estab);
+        if (file_exists(__DIR__ . '/../includes/tema.php')) {
+            require_once __DIR__ . '/../includes/tema.php';
+            if (function_exists('tema_imprimirTailwindConfig')) {
+                tema_imprimirTailwindConfig($estab);
+            }
+        }
     ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -55,7 +59,7 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body class="min-h-screen bg-dark-base text-slate-100 flex flex-col antialiased">
 
-    <!-- Top Header -->
+    <!-- Header Superior -->
     <header class="sticky top-0 z-40 bg-dark-surface/90 backdrop-blur-md border-b border-dark-border px-4 sm:px-6 py-3">
         <div class="max-w-5xl mx-auto flex items-center justify-between gap-2">
             <div class="flex items-center gap-3 min-w-0">
@@ -67,14 +71,27 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
                 </h1>
             </div>
 
-            <button onclick="abrirModalProduto()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white transition active:scale-95 flex items-center gap-1.5 shrink-0 shadow-lg shadow-purple-950/40">
-                <i class="fa-solid fa-plus text-xs"></i>
-                <span>Novo Item</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <a href="../cardapio.php?estab=<?= $estabId ?>" target="_blank" class="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5 shrink-0">
+                    <i class="fa-solid fa-eye text-xs"></i>
+                    <span class="hidden sm:inline">Ver Cardápio</span>
+                </a>
+
+                <button onclick="abrirModalProduto()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white transition active:scale-95 flex items-center gap-1.5 shrink-0 shadow-lg shadow-purple-950/40">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Novo Item</span>
+                </button>
+            </div>
         </div>
     </header>
 
     <main class="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6">
+        
+        <div class="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-xs text-amber-300 flex items-center gap-2.5">
+            <i class="fa-solid fa-star text-amber-400 text-sm shrink-0"></i>
+            <span>Para lanches semanais (Pastel, Yakisoba, etc.), cadastre na categoria <b>Especiais da Semana</b> ou ative o botão de <b>Especial da Semana</b> no modal.</span>
+        </div>
+
         <div id="busca-container" class="mb-3">
             <div class="relative">
                 <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
@@ -94,11 +111,14 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </main>
 
-    <!-- Modal Criar/Editar Produto -->
-    <div id="modal-produto" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <!-- Modal Criar/Editar Produto Remodelado -->
+    <div id="modal-produto" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="w-full max-w-md bg-dark-surface border border-dark-border rounded-3xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <div class="flex items-center justify-between">
-                <h2 id="modal-titulo" class="text-sm font-extrabold text-white">Novo Item</h2>
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div>
+                    <h2 id="modal-titulo" class="text-sm font-extrabold text-white">Novo Item</h2>
+                    <p class="text-[11px] text-slate-400">Preencha os dados do produto para o cardápio</p>
+                </div>
                 <button onclick="fecharModalProduto()" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center transition">
                     <i class="fa-solid fa-xmark text-xs"></i>
                 </button>
@@ -107,23 +127,35 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             <input type="hidden" id="produto-id" value="">
 
             <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Nome do item</label>
-                <input type="text" id="produto-nome" placeholder="Ex: X-Salada" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Nome do item *</label>
+                <input type="text" id="produto-nome" placeholder="Ex: Yakisoba Tradicional / Pastel Especial" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
             </div>
 
             <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Categoria</label>
-                <select id="produto-categoria" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Categoria do Cardápio *</label>
+                <select id="produto-categoria" onchange="verificarCategoriaEspecial(this.value)" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
                 </select>
             </div>
 
-            <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Descrição</label>
-                <textarea id="produto-descricao" rows="3" placeholder="Ingredientes, detalhes do item..." class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition resize-none"></textarea>
+            <!-- Bloco Destacar no Topo -->
+            <div class="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">⭐</span>
+                    <div>
+                        <p class="text-xs font-bold text-amber-300 leading-tight">Especial da Semana</p>
+                        <p class="text-[10px] text-amber-200/70 leading-tight">Exibir no banner de destaque no topo</p>
+                    </div>
+                </div>
+                <input type="checkbox" id="produto-destaque" class="switch-toggle">
             </div>
 
             <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Preço (R$)</label>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Descrição / Ingredientes</label>
+                <textarea id="produto-descricao" rows="2" placeholder="Ex: Carne, frango, legumes frescos e molho especial..." class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition resize-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Preço de Venda (R$) *</label>
                 <input type="number" id="produto-preco" step="0.01" min="0" placeholder="0.00" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
             </div>
 
@@ -254,11 +286,18 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
 
         function cardProduto(p) {
             const disponivel = String(p.disponivel) === '1';
+            const destaque = String(p.destaque_dia || '0') === '1';
+
             return `
-                <div class="bg-dark-surface border border-dark-border rounded-2xl p-3.5 flex items-start gap-3 ${disponivel ? '' : 'opacity-50'}">
+                <div class="bg-dark-surface border ${destaque ? 'border-amber-500/50 shadow-md shadow-amber-950/20' : 'border-dark-border'} rounded-2xl p-3.5 flex items-start gap-3 ${disponivel ? '' : 'opacity-50'}">
                     <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <h4 class="text-xs font-bold text-white truncate">${escapeHtml(p.nome)}</h4>
+                            ${destaque ? `
+                                <span class="text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                    <i class="fa-solid fa-star text-[8px]"></i> Especial Ativo
+                                </span>
+                            ` : ''}
                         </div>
                         ${p.descricao ? `<p class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(p.descricao)}</p>` : ''}
                         <div class="mt-2 flex items-center gap-2">
@@ -269,7 +308,13 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
                         </div>
                     </div>
                     <div class="flex flex-col items-end gap-2 shrink-0">
-                        <input type="checkbox" class="switch-toggle" ${disponivel ? 'checked' : ''} onchange="toggleDisponivel(${p.id}, this.checked)" title="Disponível">
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleDestaque(${p.id}, ${destaque ? 0 : 1})" title="${destaque ? 'Remover do Destaque' : 'Destacar como Especial da Semana'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition border ${destaque ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-white/5 hover:bg-white/10 text-slate-500 hover:text-amber-300 border-white/5'}">
+                                <i class="fa-solid fa-star text-[10px]"></i>
+                            </button>
+
+                            <input type="checkbox" class="switch-toggle" ${disponivel ? 'checked' : ''} onchange="toggleDisponivel(${p.id}, this.checked)" title="Disponível">
+                        </div>
                         <div class="flex items-center gap-1.5">
                             <button onclick='abrirModalProduto(${JSON.stringify(p)})' class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition">
                                 <i class="fa-solid fa-pen text-[10px]"></i>
@@ -291,9 +336,19 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
 
         function preencherSelectCategorias(categoriaSelecionadaId) {
             const select = document.getElementById('produto-categoria');
-            select.innerHTML = categorias.map(c =>
-                `<option value="${c.id}" ${String(c.id) === String(categoriaSelecionadaId) ? 'selected' : ''}>${escapeHtml(c.nome)}</option>`
-            ).join('');
+            select.innerHTML = categorias.map(c => {
+                const ehEspecial = c.nome.toLowerCase().includes('especial');
+                return `<option value="${c.id}" ${String(c.id) === String(categoriaSelecionadaId) ? 'selected' : ''}>
+                    ${ehEspecial ? '⭐ ' : ''}${escapeHtml(c.nome)}
+                </option>`;
+            }).join('');
+        }
+
+        function verificarCategoriaEspecial(catId) {
+            const cat = categorias.find(c => String(c.id) === String(catId));
+            if (cat && cat.nome.toLowerCase().includes('especial')) {
+                document.getElementById('produto-destaque').checked = true;
+            }
         }
 
         function abrirModalProduto(produto) {
@@ -302,6 +357,10 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById('produto-nome').value = produto ? produto.nome : '';
             document.getElementById('produto-descricao').value = produto ? (produto.descricao || '') : '';
             document.getElementById('produto-preco').value = produto ? parseFloat(produto.preco).toFixed(2) : '';
+            
+            const destaque = produto ? (String(produto.destaque_dia) === '1') : false;
+            document.getElementById('produto-destaque').checked = destaque;
+
             preencherSelectCategorias(produto ? produto.categoria_id : (categorias[0] ? categorias[0].id : ''));
             document.getElementById('modal-produto').classList.remove('hidden');
         }
@@ -316,6 +375,7 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             const categoriaId = document.getElementById('produto-categoria').value;
             const descricao = document.getElementById('produto-descricao').value.trim();
             const preco = parseFloat(document.getElementById('produto-preco').value);
+            const destaque_dia = document.getElementById('produto-destaque').checked ? 1 : 0;
 
             if (!nome || !categoriaId || !preco || preco <= 0) {
                 Swal.fire({ icon: 'warning', title: 'Preencha nome, categoria e um preço válido.', background: '#141021', color: '#fff' });
@@ -325,16 +385,41 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
             const payload = {
                 acao: id ? 'editar_produto' : 'criar_produto',
                 id: id || undefined,
-                nome, categoria_id: categoriaId, descricao, preco
+                nome, categoria_id: categoriaId, descricao, preco, destaque_dia
             };
 
             const resultado = await chamarApi(payload);
             if (resultado.sucesso) {
                 fecharModalProduto();
                 await recarregarDados();
-                Swal.fire({ icon: 'success', title: resultado.mensagem, background: '#141021', color: '#fff', timer: 1500, showConfirmButton: false });
+                Swal.fire({ icon: 'success', title: resultado.mensagem || 'Item salvo com sucesso!', background: '#141021', color: '#fff', timer: 1500, showConfirmButton: false });
             } else {
                 Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao salvar.', background: '#141021', color: '#fff' });
+            }
+        }
+
+        async function toggleDestaque(id, novoDestaque) {
+            const resultado = await chamarApi({ acao: 'toggle_destaque', id, destaque: novoDestaque });
+            if (resultado.sucesso) {
+                produtos.forEach(x => {
+                    if (novoDestaque === 1) {
+                        x.destaque_dia = (String(x.id) === String(id)) ? 1 : 0;
+                    } else if (String(x.id) === String(id)) {
+                        x.destaque_dia = 0;
+                    }
+                });
+                renderizarProdutos();
+                Swal.fire({
+                    icon: novoDestaque ? 'success' : 'info',
+                    title: novoDestaque ? '⭐ Especial Ativado!' : 'Destaque Removido',
+                    text: novoDestaque ? 'Este item agora é o destaque do cardápio.' : 'O cardápio voltou ao padrão normal.',
+                    background: '#141021',
+                    color: '#fff',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao atualizar destaque.', background: '#141021', color: '#fff' });
             }
         }
 

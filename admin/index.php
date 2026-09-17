@@ -372,6 +372,7 @@ if ($estab) {
                         </button>
                     </div>
                 </div>
+                
 
                 <div class="bg-[#141021] p-2.5 rounded-xl border border-white/5 space-y-1">
                     ${itensHtml}

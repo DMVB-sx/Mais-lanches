@@ -95,6 +95,24 @@ try {
             exit;
         }
 
+        if ($acao === 'toggle_destaque') {
+    $produtoId = (int)($dados['id'] ?? 0);
+    $destaque = (int)($dados['destaque'] ?? 0);
+
+    // 1. Zera qualquer outro produto em destaque
+    $stmtLimpa = $pdo->prepare("UPDATE produtos SET destaque_dia = 0 WHERE estabelecimento_id = :estab");
+    $stmtLimpa->execute([':estab' => $estabId]);
+
+    // 2. Se for para ativar, marca este produto
+    if ($destaque === 1) {
+        $stmtAtiva = $pdo->prepare("UPDATE produtos SET destaque_dia = 1 WHERE id = :id AND estabelecimento_id = :estab");
+        $stmtAtiva->execute([':id' => $produtoId, ':estab' => $estabId]);
+    }
+
+    echo json_encode(['sucesso' => true]);
+    exit;
+}
+
         if ($acao === 'editar_produto') {
             $id = (int)($dados['id'] ?? 0);
             $nome = trim($dados['nome'] ?? '');
