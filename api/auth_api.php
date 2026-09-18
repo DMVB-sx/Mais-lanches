@@ -15,3 +15,14 @@ if (!isset($_SESSION['admin_logado']) || $_SESSION['admin_logado'] !== true) {
     echo json_encode(['sucesso' => false, 'erro' => 'Não autorizado. Faça login no painel administrativo.']);
     exit;
 }
+
+// Isolamento entre clientes (multi-tenant): um admin só pode ver/editar o
+// próprio estabelecimento, mesmo que altere o "?estab=" na URL/requisição.
+if (isset($_SESSION['admin_estab']) && isset($_GET['estab'])) {
+    if ((int)$_GET['estab'] !== (int)$_SESSION['admin_estab']) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['sucesso' => false, 'erro' => 'Você não tem permissão para acessar este estabelecimento.']);
+        exit;
+    }
+}

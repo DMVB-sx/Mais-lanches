@@ -8,12 +8,19 @@ require_once __DIR__ . '/../config/conexao.php';
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 try {
-    $stmt = $pdo->prepare("SELECT id, status FROM pedidos WHERE id = :id");
+    $stmt = $pdo->prepare("SELECT id, status, status_pagamento, forma_pagamento, pix_copia_cola, pix_qr_base64 FROM pedidos WHERE id = :id");
     $stmt->execute([':id' => $id]);
     $pedido = $stmt->fetch();
 
     if ($pedido) {
-        echo json_encode(['sucesso' => true, 'status' => $pedido['status']]);
+        echo json_encode([
+            'sucesso' => true,
+            'status' => $pedido['status'],
+            'status_pagamento' => $pedido['status_pagamento'],
+            'forma_pagamento' => $pedido['forma_pagamento'],
+            'pix_copia_cola' => $pedido['pix_copia_cola'],
+            'pix_qr_base64' => $pedido['pix_qr_base64'],
+        ]);
     } else {
         echo json_encode(['sucesso' => false, 'erro' => 'Pedido não encontrado']);
     }

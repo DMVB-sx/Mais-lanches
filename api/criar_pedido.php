@@ -7,6 +7,8 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
 require_once __DIR__ . '/../config/conexao.php';
+require_once __DIR__ . '/../includes/pix.php';
+require_once __DIR__ . '/../includes/mercadopago.php';
 
 try {
     $raw = file_get_contents('php://input');
@@ -45,17 +47,24 @@ try {
 
     $pdo->beginTransaction();
 
+    // Pedidos pagos na entrega (dinheiro/cartão) já entram liberados pra
+    // produção. Pedidos via Pix ficam "pendente" até a loja confirmar o
+    // recebimento (automaticamente, se o Mercado Pago estiver configurado,
+    // ou manualmente pelo painel, caso contrário) — assim a cozinha não
+    // começa a preparar um pedido que ainda não foi pago.
+    $statusPagamentoInicial = ($formaPagamento === 'pix') ? 'pendente' : 'nao_aplicavel';
+
     $stmtPed = $pdo->prepare("
         INSERT INTO pedidos (
             estabelecimento_id, cliente_nome, cliente_whatsapp, 
             cliente_endereco, cliente_bairro, cliente_complemento, 
             tipo_entrega, taxa_entrega, subtotal, total, 
-            forma_pagamento, troco_para, observacoes, status, criado_em
+            forma_pagamento, troco_para, observacoes, status, status_pagamento, criado_em
         ) VALUES (
             :estab, :nome, :wpp, 
             :endereco, :bairro, :compl, 
             :tipo, :taxa, :subtotal, :total, 
-            :forma, :troco, :obs, 'novo', NOW()
+            :forma, :troco, :obs, 'novo', :status_pag, NOW()
         )
     ");
 
@@ -72,7 +81,8 @@ try {
         ':total' => $total,
         ':forma' => $formaPagamento,
         ':troco' => $trocoPara,
-        ':obs' => $observacoes
+        ':obs' => $observacoes,
+        ':status_pag' => $statusPagamentoInicial
     ]);
 
     $pedidoId = $pdo->lastInsertId();
@@ -142,11 +152,78 @@ try {
 
     $pdo->commit();
 
-    echo json_encode([
+    // --- Geração do Pix (se for a forma de pagamento escolhida) ---
+    $respostaPix = [];
+    if ($formaPagamento === 'pix') {
+        $stmtEstabPix = $pdo->prepare("SELECT nome, chave_pix, nome_pix, cidade_pix, mercadopago_access_token FROM estabelecimentos WHERE id = :id");
+        $stmtEstabPix->execute([':id' => $estabId]);
+        $estabPix = $stmtEstabPix->fetch(PDO::FETCH_ASSOC);
+
+        $tokenMp = trim($estabPix['mercadopago_access_token'] ?? '');
+        $valorFinal = $totalConferido; // total já validado no servidor, calculado acima
+
+        if ($tokenMp !== '') {
+            // --- Caminho automático: Mercado Pago avisa quando for pago ---
+            $notificationUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']) . "/webhook_mercadopago.php?estab={$estabId}";
+            $resultadoMp = mp_criarPagamentoPix(
+                $tokenMp,
+                $valorFinal,
+                "Pedido #{$pedidoId} - " . ($estabPix['nome'] ?? 'Loja'),
+                (string)$pedidoId,
+                $notificationUrl
+            );
+
+            if ($resultadoMp['sucesso']) {
+                $stmtSalvaPix = $pdo->prepare("UPDATE pedidos SET pagamento_id = :pid, pix_copia_cola = :copia, pix_qr_base64 = :qr WHERE id = :id");
+                $stmtSalvaPix->execute([
+                    ':pid' => $resultadoMp['payment_id'],
+                    ':copia' => $resultadoMp['qr_code'],
+                    ':qr' => $resultadoMp['qr_code_base64'],
+                    ':id' => $pedidoId
+                ]);
+                $respostaPix = [
+                    'pix_automatico' => true,
+                    'pix_copia_cola' => $resultadoMp['qr_code'],
+                    'pix_qr_base64' => $resultadoMp['qr_code_base64'],
+                ];
+            }
+        }
+
+        // Se não tem Mercado Pago configurado, ou se a chamada acima falhou
+        // por qualquer motivo, cai pro Pix estático — o pedido continua
+        // podendo ser pago, só que a confirmação vira manual (a loja
+        // confere no próprio banco e confirma no painel).
+        if (empty($respostaPix)) {
+            if (!empty($estabPix['chave_pix'])) {
+                $payload = pix_montarPayload(
+                    $estabPix['chave_pix'],
+                    $estabPix['nome_pix'] ?? $estabPix['nome'] ?? 'LOJA',
+                    $estabPix['cidade_pix'] ?? 'BRASIL',
+                    $valorFinal,
+                    'PED' . $pedidoId
+                );
+                $stmtSalvaPix = $pdo->prepare("UPDATE pedidos SET pix_copia_cola = :copia WHERE id = :id");
+                $stmtSalvaPix->execute([':copia' => $payload, ':id' => $pedidoId]);
+                $respostaPix = [
+                    'pix_automatico' => false,
+                    'pix_copia_cola' => $payload,
+                    'pix_qr_base64' => null,
+                ];
+            } else {
+                // Loja nem cadastrou uma chave Pix ainda — não travamos o
+                // pedido, só avisamos o cliente pra combinar o pagamento
+                // direto com a loja.
+                $respostaPix = ['pix_automatico' => false, 'pix_copia_cola' => null, 'pix_qr_base64' => null];
+            }
+        }
+    }
+
+    echo json_encode(array_merge([
         'sucesso' => true,
         'pedido_id' => $pedidoId,
+        'status_pagamento' => $statusPagamentoInicial,
         'mensagem' => 'Pedido registrado com sucesso!'
-    ]);
+    ], $respostaPix));
 
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {

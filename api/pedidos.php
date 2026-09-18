@@ -24,7 +24,12 @@ try {
         $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($pedidos as &$p) {
-            $stmtItens = $pdo->prepare("SELECT * FROM pedido_itens WHERE pedido_id = :id");
+            $stmtItens = $pdo->prepare("
+                SELECT i.*, COALESCE(pr.nome, 'Item Personalizado') as produto_nome
+                FROM pedido_itens i
+                LEFT JOIN produtos pr ON i.produto_id = pr.id
+                WHERE i.pedido_id = :id
+            ");
             $stmtItens->execute([':id' => $p['id']]);
             $p['itens'] = $stmtItens->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -36,6 +41,17 @@ try {
     if ($metodo === 'POST') {
         $dados = json_decode(file_get_contents('php://input'), true);
         $pedidoId = isset($dados['pedido_id']) ? (int)$dados['pedido_id'] : 0;
+
+        if (($dados['acao'] ?? '') === 'confirmar_pagamento_pix') {
+            // Confirmação manual: usada quando a loja não tem o Mercado
+            // Pago conectado (ou como conferência extra), depois de checar
+            // no próprio aplicativo do banco que o Pix realmente caiu.
+            $stmt = $pdo->prepare("UPDATE pedidos SET status_pagamento = 'pago' WHERE id = :id AND estabelecimento_id = :estab");
+            $stmt->execute([':id' => $pedidoId, ':estab' => $estabId]);
+            echo json_encode(['sucesso' => true]);
+            exit;
+        }
+
         $novoStatus = trim($dados['status'] ?? 'novo');
 
         $stmt = $pdo->prepare("UPDATE pedidos SET status = :status WHERE id = :id AND estabelecimento_id = :estab");

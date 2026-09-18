@@ -56,6 +56,7 @@ try {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <style>
         body {
@@ -1000,15 +1001,21 @@ try {
                     carrinho = [];
                     atualizarInterface();
 
-                    Swal.fire({
-                        title: 'Pedido Confirmado! 🎉',
-                        html: `Seu pedido foi recebido com sucesso e <b>já está sendo preparado</b>!`,
-                        icon: 'success',
-                        confirmButtonColor: '#9333ea',
-                        confirmButtonText: 'Acompanhar Status'
-                    }).then(() => {
-                        window.location.href = `acompanhar.php?id=${resposta.pedido_id}`;
-                    });
+                    if (resposta.status_pagamento === 'pendente') {
+                        // Pedido via Pix: mostra o QR e só segue quando o
+                        // pagamento for confirmado (automático ou manual).
+                        abrirTelaPagamentoPix(resposta);
+                    } else {
+                        Swal.fire({
+                            title: 'Pedido Confirmado! 🎉',
+                            html: `Seu pedido foi recebido com sucesso e <b>já está sendo preparado</b>!`,
+                            icon: 'success',
+                            confirmButtonColor: '#9333ea',
+                            confirmButtonText: 'Acompanhar Status'
+                        }).then(() => {
+                            window.location.href = `acompanhar.php?id=${resposta.pedido_id}`;
+                        });
+                    }
                 } else {
                     Swal.fire('Atenção', resposta.erro, 'error');
                     btn.disabled = false;
@@ -1021,10 +1028,112 @@ try {
             }
         }
 
+        // ---------------------------------------------------------------
+        // Pagamento via Pix: mostra o QR Code e aguarda a confirmação.
+        // ---------------------------------------------------------------
+        let intervaloChecagemPix = null;
+
+        function abrirTelaPagamentoPix(resposta) {
+            window.pedidoPixAtualId = resposta.pedido_id;
+            const modal = document.getElementById('modal-pix');
+            const boxQr = document.getElementById('pix-qr-box');
+            const inputCopiaCola = document.getElementById('pix-copia-cola');
+            const avisoManual = document.getElementById('pix-aviso-manual');
+            const statusTexto = document.getElementById('pix-status-texto');
+
+            inputCopiaCola.value = resposta.pix_copia_cola || '';
+            statusTexto.textContent = 'Aguardando pagamento...';
+            avisoManual.classList.toggle('hidden', !!resposta.pix_automatico);
+
+            boxQr.innerHTML = '';
+            if (resposta.pix_qr_base64) {
+                // Mercado Pago já manda o QR pronto como imagem.
+                boxQr.innerHTML = `<img src="data:image/png;base64,${resposta.pix_qr_base64}" class="w-full h-full object-contain" alt="QR Code Pix">`;
+            } else if (resposta.pix_copia_cola && window.QRCode) {
+                // Sem gateway: desenha o QR no navegador a partir do texto,
+                // sem enviar isso pra nenhum servidor externo.
+                new QRCode(boxQr, { text: resposta.pix_copia_cola, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff' });
+            } else {
+                boxQr.innerHTML = `<p class="text-xs text-slate-400 text-center p-4">Chave Pix não configurada pela loja. Combine o pagamento direto com o estabelecimento.</p>`;
+            }
+
+            modal.classList.remove('hidden');
+
+            if (resposta.pix_automatico) {
+                intervaloChecagemPix = setInterval(() => verificarPagamentoPix(resposta.pedido_id), 4000);
+            }
+        }
+
+        function copiarChavePix() {
+            const input = document.getElementById('pix-copia-cola');
+            input.select();
+            navigator.clipboard.writeText(input.value).then(() => {
+                Swal.fire({ icon: 'success', title: 'Copiado!', toast: true, position: 'top', timer: 1500, showConfirmButton: false });
+            });
+        }
+
+        async function verificarPagamentoPix(pedidoId) {
+            try {
+                const res = await fetch(`api/status_pedido.php?id=${pedidoId}`);
+                const dados = await res.json();
+
+                if (dados.sucesso && dados.status_pagamento === 'pago') {
+                    clearInterval(intervaloChecagemPix);
+                    document.getElementById('pix-status-texto').textContent = 'Pagamento confirmado!';
+                    setTimeout(() => { window.location.href = `acompanhar.php?id=${pedidoId}`; }, 1200);
+                } else if (dados.sucesso && dados.status_pagamento === 'recusado') {
+                    clearInterval(intervaloChecagemPix);
+                    document.getElementById('pix-status-texto').textContent = 'Pagamento não aprovado. Tente novamente.';
+                }
+            } catch (e) {
+                // Falha momentânea de rede não interrompe a tentativa seguinte.
+            }
+        }
+
+        function continuarSemConfirmacao(pedidoId) {
+            // Caminho manual (sem Mercado Pago): o cliente já fez o Pix por
+            // fora, mas o sistema não tem como confirmar sozinho — a loja
+            // confirma no painel depois de ver o dinheiro cair no banco.
+            window.location.href = `acompanhar.php?id=${pedidoId}`;
+        }
+
         // Inicialização
         carregarCardapio();
         checarStatusLojaEmTempoReal();
         setInterval(checarStatusLojaEmTempoReal, 3000);
     </script>
+
+    <!-- Modal de Pagamento Pix -->
+    <div id="modal-pix" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-dark-surface border border-dark-border rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div class="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <i class="fa-solid fa-qrcode text-emerald-400 text-2xl"></i>
+            </div>
+            <div>
+                <h2 class="text-sm font-extrabold text-white">Pague com Pix pra confirmar</h2>
+                <p id="pix-status-texto" class="text-xs text-slate-400 mt-1">Aguardando pagamento...</p>
+            </div>
+
+            <div id="pix-qr-box" class="w-56 h-56 mx-auto bg-white rounded-2xl flex items-center justify-center p-2"></div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 text-left">Ou copie o código Pix</label>
+                <div class="flex items-center gap-2">
+                    <input id="pix-copia-cola" readonly class="flex-1 p-2.5 bg-dark-card border border-dark-border rounded-xl text-white text-[10px] font-mono outline-none truncate">
+                    <button onclick="copiarChavePix()" class="w-10 h-10 rounded-xl bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center transition shrink-0">
+                        <i class="fa-solid fa-copy text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="pix-aviso-manual" class="hidden text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left">
+                Depois de pagar, a loja vai confirmar o recebimento manualmente — pode levar alguns minutos.
+            </div>
+
+            <button onclick="continuarSemConfirmacao(window.pedidoPixAtualId)" id="btn-pix-continuar" class="text-xs text-slate-400 hover:text-slate-200 underline transition">
+                Já paguei, acompanhar meu pedido
+            </button>
+        </div>
+    </div>
 </body>
 </html>

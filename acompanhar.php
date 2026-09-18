@@ -18,7 +18,7 @@ if (!$pedido) {
 
 $stmtItens = $pdo->prepare("
     SELECT i.*, COALESCE(p.nome, 'Item Personalizado') as produto_nome 
-    FROM itens_pedido i
+    FROM pedido_itens i
     LEFT JOIN produtos p ON i.produto_id = p.id
     WHERE i.pedido_id = :id
 ");

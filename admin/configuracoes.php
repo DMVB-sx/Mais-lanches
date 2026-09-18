@@ -14,13 +14,17 @@ require_once __DIR__ . '/../includes/tema.php';
 $corPrimariaAtual = !empty($estab['cor_primaria']) ? $estab['cor_primaria'] : TEMA_COR_PRIMARIA_PADRAO;
 $corSecundariaAtual = !empty($estab['cor_secundaria']) ? $estab['cor_secundaria'] : TEMA_COR_SECUNDARIA_PADRAO;
 $logoAtual = $estab['logo_url'] ?? '';
+$chavePixAtual = $estab['chave_pix'] ?? '';
+$nomePixAtual = $estab['nome_pix'] ?? '';
+$cidadePixAtual = $estab['cidade_pix'] ?? '';
+$tokenMpAtual = $estab['mercadopago_access_token'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Visual da Loja - <?= htmlspecialchars($nomeEstab) ?></title>
+    <title>Configurações da Loja - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <?php tema_imprimirTailwindConfig($estab); ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -38,7 +42,7 @@ $logoAtual = $estab['logo_url'] ?? '';
             <a href="index.php?estab=<?= $estabId ?>" class="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border flex items-center justify-center transition shrink-0">
                 <i class="fa-solid fa-arrow-left text-xs"></i>
             </a>
-            <h1 class="text-sm font-extrabold text-white tracking-tight">Visual da Loja</h1>
+            <h1 class="text-sm font-extrabold text-white tracking-tight">Configurações da Loja</h1>
         </div>
     </header>
 
@@ -98,8 +102,58 @@ $logoAtual = $estab['logo_url'] ?? '';
             <input type="text" id="input-logo-url" value="<?= htmlspecialchars($logoAtual) ?>" placeholder="https://exemplo.com/logo.png" oninput="atualizarPreview()" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
         </div>
 
+        <hr class="border-dark-border">
+
+        <div>
+            <h2 class="text-sm font-extrabold text-white flex items-center gap-2"><i class="fa-solid fa-qrcode text-brand-400"></i> Pagamento via Pix</h2>
+            <p class="text-xs text-slate-400 mt-1">
+                Configure sua chave Pix pra que o QR Code seja gerado automaticamente no checkout. Se você também conectar o Mercado Pago abaixo, a confirmação do pagamento passa a ser automática — o pedido só entra na fila da cozinha depois que o Pix cair.
+            </p>
+        </div>
+
+        <!-- Chave Pix (fallback manual) -->
+        <div class="bg-dark-surface border border-dark-border rounded-2xl p-5 space-y-3">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Sua chave Pix</span>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Chave Pix (CPF, CNPJ, e-mail, telefone ou chave aleatória)</label>
+                <input type="text" id="input-chave-pix" value="<?= htmlspecialchars($chavePixAtual) ?>" placeholder="00000000000" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Nome do titular</label>
+                    <input type="text" id="input-nome-pix" value="<?= htmlspecialchars($nomePixAtual) ?>" placeholder="<?= htmlspecialchars($nomeEstab) ?>" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Cidade</label>
+                    <input type="text" id="input-cidade-pix" value="<?= htmlspecialchars($cidadePixAtual) ?>" placeholder="SAO PAULO" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs outline-none focus:border-brand-500 transition">
+                </div>
+            </div>
+            <p class="text-[11px] text-amber-300/80 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                Sem o Mercado Pago conectado, alguém da loja precisa confirmar manualmente no painel que o Pix caiu no banco — esse QR sozinho não avisa o sistema automaticamente.
+            </p>
+        </div>
+
+        <!-- Mercado Pago (confirmação automática) -->
+        <div class="bg-dark-surface border border-dark-border rounded-2xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Confirmação automática (opcional)</span>
+                <span id="badge-mp-status" class="text-[10px] font-bold px-2 py-1 rounded-full <?= $tokenMpAtual ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-slate-500' ?>">
+                    <?= $tokenMpAtual ? 'Conectado' : 'Não conectado' ?>
+                </span>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Access Token do Mercado Pago</label>
+                <input type="password" id="input-token-mp" value="<?= htmlspecialchars($tokenMpAtual) ?>" placeholder="APP_USR-0000000000000000-000000-00000000000000000000000000000000-000000000" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-white text-xs font-mono outline-none focus:border-brand-500 transition">
+            </div>
+            <p class="text-[11px] text-slate-500">
+                Pra pegar o seu: crie uma conta no <a href="https://www.mercadopago.com.br" target="_blank" class="text-brand-400 underline">Mercado Pago</a> (é da sua loja, o dinheiro cai direto pra você), acesse
+                <a href="https://www.mercadopago.com.br/developers/panel" target="_blank" class="text-brand-400 underline">Painel de Desenvolvedores</a> → Suas integrações → Criar aplicação → Credenciais de produção → copie o "Access Token".
+            </p>
+        </div>
+
         <button onclick="salvarConfiguracoes()" class="w-full bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-extrabold p-3.5 rounded-xl text-xs transition active:scale-95 shadow-lg shadow-purple-950/60 flex items-center justify-center gap-2">
-            <i class="fa-solid fa-check"></i> Salvar Identidade Visual
+            <i class="fa-solid fa-check"></i> Salvar Configurações
         </button>
     </main>
 
@@ -136,17 +190,24 @@ $logoAtual = $estab['logo_url'] ?? '';
             const corPrimaria = document.getElementById('input-cor-primaria').value;
             const corSecundaria = document.getElementById('input-cor-secundaria').value;
             const logoUrl = document.getElementById('input-logo-url').value.trim();
+            const chavePix = document.getElementById('input-chave-pix').value.trim();
+            const nomePix = document.getElementById('input-nome-pix').value.trim();
+            const cidadePix = document.getElementById('input-cidade-pix').value.trim();
+            const tokenMp = document.getElementById('input-token-mp').value.trim();
 
             try {
                 const res = await fetch('../api/atualizar_estabelecimento.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ estab_id: estabId, cor_primaria: corPrimaria, cor_secundaria: corSecundaria, logo_url: logoUrl })
+                    body: JSON.stringify({
+                        estab_id: estabId, cor_primaria: corPrimaria, cor_secundaria: corSecundaria, logo_url: logoUrl,
+                        chave_pix: chavePix, nome_pix: nomePix, cidade_pix: cidadePix, mercadopago_access_token: tokenMp
+                    })
                 });
                 const resultado = await res.json();
 
                 if (resultado.sucesso) {
-                    await Swal.fire({ icon: 'success', title: 'Salvo!', text: 'A página vai recarregar pra aplicar o novo visual.', background: '#141021', color: '#fff', timer: 1800, showConfirmButton: false });
+                    await Swal.fire({ icon: 'success', title: 'Salvo!', text: 'A página vai recarregar pra aplicar as mudanças.', background: '#141021', color: '#fff', timer: 1800, showConfirmButton: false });
                     window.location.reload();
                 } else {
                     Swal.fire({ icon: 'error', title: resultado.erro || 'Erro ao salvar.', background: '#141021', color: '#fff' });

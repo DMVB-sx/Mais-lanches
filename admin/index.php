@@ -304,8 +304,12 @@ if ($estab) {
         }
 
         function criarCardPedido(p) {
+            const st = (p.status || 'novo').toLowerCase();
+            const nomeClienteSeguro = (p.cliente_nome || 'Cliente').replace(/'/g, "\\'");
+            const pagamentoPendente = (p.forma_pagamento || '').toLowerCase() === 'pix' && p.status_pagamento === 'pendente';
+
             const card = document.createElement('div');
-            card.className = 'bg-dark-card border border-dark-border rounded-2xl p-3.5 shadow-lg hover:border-brand-500/40 transition space-y-3';
+            card.className = `bg-dark-card border rounded-2xl p-3.5 shadow-lg transition space-y-3 ${pagamentoPendente ? 'border-amber-500/60 shadow-amber-950/30' : 'border-dark-border hover:border-brand-500/40'}`;
 
             let dataFormatada = '--:--';
             if (p.criado_em) {
@@ -331,8 +335,14 @@ if ($estab) {
             }
 
             let botoesAcao = '';
-            const st = (p.status || 'novo').toLowerCase();
-            if (st === 'novo') {
+
+            if (pagamentoPendente) {
+                botoesAcao = `
+                    <button onclick="confirmarPagamentoPix(${p.id}, '${nomeClienteSeguro}')" class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-black font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-money-bill-transfer"></i> Confirmar Pagamento Pix
+                    </button>
+                `;
+            } else if (st === 'novo') {
                 botoesAcao = `
                     <button onclick="mudarStatusPedido(${p.id}, 'em_preparo')" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
                         <i class="fa-solid fa-fire-burner"></i> Iniciar Preparo
@@ -352,8 +362,6 @@ if ($estab) {
                 `;
             }
 
-            const nomeClienteSeguro = (p.cliente_nome || 'Cliente').replace(/'/g, "\\'");
-
             card.innerHTML = `
                 <div class="flex items-start justify-between gap-2 border-b border-dark-border pb-2.5">
                     <div>
@@ -361,6 +369,11 @@ if ($estab) {
                             <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isDelivery ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
                                 <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-store'} text-[9px]"></i> ${isDelivery ? 'Delivery' : 'Retirada no Balcão'}
                             </span>
+                            ${pagamentoPendente ? `
+                                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+                                    <i class="fa-solid fa-clock text-[9px]"></i> Aguardando Pix
+                                </span>
+                            ` : ''}
                         </div>
                         <p class="text-sm font-extrabold text-white mt-1">${p.cliente_nome || 'Cliente'}</p>
                     </div>
@@ -370,6 +383,9 @@ if ($estab) {
                         <button onclick="removerPedidoDaTela(${p.id}, '${nomeClienteSeguro}')" title="Limpar pedido da tela" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 flex items-center justify-center transition">
                             <i class="fa-solid fa-xmark text-[11px]"></i>
                         </button>
+                        <a href="imprimir_pedido.php?id=${p.id}&estab=${estabId}" target="_blank" title="Imprimir pedido" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-brand-500/20 text-slate-400 hover:text-brand-400 border border-white/10 flex items-center justify-center transition">
+                            <i class="fa-solid fa-print text-[11px]"></i>
+                        </a>
                     </div>
                 </div>
                 
@@ -420,6 +436,34 @@ if ($estab) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ pedido_id: pedidoId, status: novoStatus })
+                });
+                const data = await res.json();
+                if (data && data.sucesso) carregarPedidos();
+            } catch (err) {}
+        }
+
+        // Confirmação manual do Pix — usada quando a loja ainda não conectou
+        // o Mercado Pago (ou como conferência extra). Só use depois de ver
+        // o dinheiro cair de verdade no aplicativo do banco.
+        async function confirmarPagamentoPix(pedidoId, nomeCliente) {
+            const confirmacao = await Swal.fire({
+                icon: 'question',
+                title: `Confirmar recebimento do Pix?`,
+                html: `Confirme só depois de ver o Pix de <b>${nomeCliente}</b> cair no seu banco.`,
+                showCancelButton: true,
+                confirmButtonText: 'Sim, já recebi',
+                cancelButtonText: 'Ainda não',
+                confirmButtonColor: '#16a34a',
+                background: '#141021',
+                color: '#fff'
+            });
+            if (!confirmacao.isConfirmed) return;
+
+            try {
+                const res = await fetch(`../api/pedidos.php?estab=${estabId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pedido_id: pedidoId, acao: 'confirmar_pagamento_pix' })
                 });
                 const data = await res.json();
                 if (data && data.sucesso) carregarPedidos();
