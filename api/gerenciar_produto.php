@@ -1,167 +1,141 @@
 <?php
-require_once __DIR__ . '/auth_api.php'; // apenas admin logado pode gerenciar produtos
+// api/gerenciar_produto.php
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST');
 
 require_once __DIR__ . '/../config/conexao.php';
 
-try {
-    $metodo = $_SERVER['REQUEST_METHOD'];
-    $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
+$estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
+$acao = $_GET['acao'] ?? '';
 
-    if ($metodo === 'GET') {
-        $acao = $_GET['acao'] ?? '';
-        if ($acao === 'categorias') {
-            $stmt = $pdo->prepare("SELECT id, nome FROM categorias WHERE estabelecimento_id = :estab ORDER BY ordem ASC");
-            $stmt->execute([':estab' => $estabId]);
-            echo json_encode(['sucesso' => true, 'categorias' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
-            exit;
-        }
-
-        if ($acao === 'produtos') {
-            $stmt = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab ORDER BY categoria_id ASC, nome ASC");
-            $stmt->execute([':estab' => $estabId]);
-            echo json_encode(['sucesso' => true, 'produtos' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
-            exit;
-        }
-    }
-
-    if ($metodo === 'POST') {
-        $dados = json_decode(file_get_contents('php://input'), true);
-        $acao = $dados['acao'] ?? '';
-
-        if ($acao === 'criar_produto') {
-            $nome = trim($dados['nome'] ?? '');
-            $categoriaId = (int)($dados['categoria_id'] ?? 0);
-            $descricao = trim($dados['descricao'] ?? '');
-            $preco = (float)($dados['preco'] ?? 0);
-
-            if (empty($nome) || $categoriaId <= 0 || $preco <= 0) {
-                echo json_encode(['sucesso' => false, 'erro' => 'Preencha nome, categoria e preço válido.']);
-                exit;
-            }
-
-            $stmt = $pdo->prepare("
-                INSERT INTO produtos (categoria_id, estabelecimento_id, nome, descricao, preco, disponivel)
-                VALUES (:categoria_id, :estab, :nome, :descricao, :preco, 1)
-            ");
-            $stmt->execute([
-                ':categoria_id' => $categoriaId,
-                ':estab' => $estabId,
-                ':nome' => $nome,
-                ':descricao' => $descricao,
-                ':preco' => $preco
-            ]);
-
-            echo json_encode(['sucesso' => true, 'mensagem' => 'Item cadastrado com sucesso!']);
-            exit;
-        }
-
-        if ($acao === 'toggle_status') {
-            $tipo = $dados['tipo'] ?? 'produto';
-            $id = (int)($dados['id'] ?? 0);
-            $novoStatus = !empty($dados['disponivel']) ? 1 : 0;
-
-            if ($tipo === 'pizza') {
-                $stmt = $pdo->prepare("UPDATE pizza_sabores SET disponivel = :status WHERE id = :id AND estabelecimento_id = :estab");
-            } else {
-                $stmt = $pdo->prepare("UPDATE produtos SET disponivel = :status WHERE id = :id AND estabelecimento_id = :estab");
-            }
-            $stmt->execute([':status' => $novoStatus, ':id' => $id, ':estab' => $estabId]);
-
-            echo json_encode(['sucesso' => true, 'mensagem' => 'Disponibilidade atualizada!']);
-            exit;
-        }
-
-        if ($acao === 'salvar_preco') {
-            $tipo = $dados['tipo'] ?? 'produto';
-            $id = (int)($dados['id'] ?? 0);
-
-            if ($tipo === 'pizza') {
-                $precoM = (float)$dados['preco_m'];
-                $precoG = (float)$dados['preco_g'];
-                $precoF = (float)$dados['preco_f'];
-
-                $stmt = $pdo->prepare("UPDATE pizza_sabores SET preco_m = :pm, preco_g = :pg, preco_f = :pf WHERE id = :id AND estabelecimento_id = :estab");
-                $stmt->execute([':pm' => $precoM, ':pg' => $precoG, ':pf' => $precoF, ':id' => $id, ':estab' => $estabId]);
-            } else {
-                $preco = (float)$dados['preco'];
-                $stmt = $pdo->prepare("UPDATE produtos SET preco = :preco WHERE id = :id AND estabelecimento_id = :estab");
-                $stmt->execute([':preco' => $preco, ':id' => $id, ':estab' => $estabId]);
-            }
-
-            echo json_encode(['sucesso' => true, 'mensagem' => 'Preço atualizado com sucesso!']);
-            exit;
-        }
-
-        if ($acao === 'toggle_destaque') {
-    $produtoId = (int)($dados['id'] ?? 0);
-    $destaque = (int)($dados['destaque'] ?? 0);
-
-    // 1. Zera qualquer outro produto em destaque
-    $stmtLimpa = $pdo->prepare("UPDATE produtos SET destaque_dia = 0 WHERE estabelecimento_id = :estab");
-    $stmtLimpa->execute([':estab' => $estabId]);
-
-    // 2. Se for para ativar, marca este produto
-    if ($destaque === 1) {
-        $stmtAtiva = $pdo->prepare("UPDATE produtos SET destaque_dia = 1 WHERE id = :id AND estabelecimento_id = :estab");
-        $stmtAtiva->execute([':id' => $produtoId, ':estab' => $estabId]);
-    }
-
-    echo json_encode(['sucesso' => true]);
-    exit;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $dados = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $acao = $dados['acao'] ?? $acao;
 }
 
-        if ($acao === 'editar_produto') {
-            $id = (int)($dados['id'] ?? 0);
-            $nome = trim($dados['nome'] ?? '');
-            $categoriaId = (int)($dados['categoria_id'] ?? 0);
-            $descricao = trim($dados['descricao'] ?? '');
-            $preco = (float)($dados['preco'] ?? 0);
-
-            if ($id <= 0 || empty($nome) || $categoriaId <= 0 || $preco <= 0) {
-                echo json_encode(['sucesso' => false, 'erro' => 'Preencha nome, categoria e preço válido.']);
-                exit;
-            }
-
-            $stmt = $pdo->prepare("
-                UPDATE produtos
-                SET nome = :nome, descricao = :descricao, categoria_id = :categoria_id, preco = :preco
-                WHERE id = :id AND estabelecimento_id = :estab
-            ");
-            $stmt->execute([
-                ':nome' => $nome,
-                ':descricao' => $descricao,
-                ':categoria_id' => $categoriaId,
-                ':preco' => $preco,
-                ':id' => $id,
-                ':estab' => $estabId
-            ]);
-
-            echo json_encode(['sucesso' => true, 'mensagem' => 'Produto atualizado com sucesso!']);
-            exit;
-        }
-
-        if ($acao === 'excluir_produto') {
-            $id = (int)($dados['id'] ?? 0);
-            if ($id <= 0) {
-                echo json_encode(['sucesso' => false, 'erro' => 'Produto inválido.']);
-                exit;
-            }
-
-            $stmt = $pdo->prepare("DELETE FROM produtos WHERE id = :id AND estabelecimento_id = :estab");
-            $stmt->execute([':id' => $id, ':estab' => $estabId]);
-
-            echo json_encode(['sucesso' => true, 'mensagem' => 'Produto removido com sucesso!']);
-            exit;
-        }
+try {
+    // 1. Listar categorias
+    if ($acao === 'categorias') {
+        $stmt = $pdo->prepare("SELECT id, nome FROM categorias WHERE estabelecimento_id = :estab ORDER BY ordem ASC, id ASC");
+        $stmt->execute([':estab' => $estabId]);
+        echo json_encode(['sucesso' => true, 'categorias' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        exit;
     }
 
-    echo json_encode(['sucesso' => false, 'erro' => 'Ação não reconhecida.']);
+    // 2. Listar produtos
+    if ($acao === 'produtos') {
+        $stmt = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab ORDER BY categoria_id ASC, nome ASC");
+        $stmt->execute([':estab' => $estabId]);
+        echo json_encode(['sucesso' => true, 'produtos' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        exit;
+    }
+
+    // 3. Alternar Disponibilidade (liga/desliga na tela)
+    if ($acao === 'toggle_status') {
+        $id = (int)($dados['id'] ?? 0);
+        $disponivel = !empty($dados['disponivel']) ? 1 : 0;
+
+        $stmt = $pdo->prepare("UPDATE produtos SET disponivel = :disp WHERE id = :id AND estabelecimento_id = :estab");
+        $stmt->execute([':disp' => $disponivel, ':id' => $id, ':estab' => $estabId]);
+
+        echo json_encode(['sucesso' => true]);
+        exit;
+    }
+
+    // 4. Alternar Especial da Semana (Estrelinha ⭐)
+    if ($acao === 'toggle_destaque') {
+        $id = (int)($dados['id'] ?? 0);
+        $destaque = !empty($dados['destaque']) ? 1 : 0;
+
+        // Limpa destaque dos outros itens
+        $pdo->prepare("UPDATE produtos SET destaque_dia = 0 WHERE estabelecimento_id = :estab")->execute([':estab' => $estabId]);
+
+        if ($destaque === 1) {
+            $stmt = $pdo->prepare("UPDATE produtos SET destaque_dia = 1 WHERE id = :id AND estabelecimento_id = :estab");
+            $stmt->execute([':id' => $id, ':estab' => $estabId]);
+        }
+
+        echo json_encode(['sucesso' => true]);
+        exit;
+    }
+
+    // 5. Salvar Preço Rápido Inline
+    if ($acao === 'salvar_preco') {
+        $id = (int)($dados['id'] ?? 0);
+        $preco = (float)($dados['preco'] ?? 0);
+
+        $stmt = $pdo->prepare("UPDATE produtos SET preco = :preco WHERE id = :id AND estabelecimento_id = :estab");
+        $stmt->execute([':preco' => $preco, ':id' => $id, ':estab' => $estabId]);
+
+        echo json_encode(['sucesso' => true]);
+        exit;
+    }
+
+    // 6. Criar Produto
+    if ($acao === 'criar_produto') {
+        $destaque = !empty($dados['destaque_dia']) ? 1 : 0;
+        if ($destaque === 1) {
+            $pdo->prepare("UPDATE produtos SET destaque_dia = 0 WHERE estabelecimento_id = :estab")->execute([':estab' => $estabId]);
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO produtos (estabelecimento_id, categoria_id, nome, descricao, preco, destaque_dia, disponivel)
+            VALUES (:estab, :cat, :nome, :desc, :preco, :destaque, 1)
+        ");
+        $stmt->execute([
+            ':estab' => $estabId,
+            ':cat' => (int)$dados['categoria_id'],
+            ':nome' => trim($dados['nome']),
+            ':desc' => trim($dados['descricao'] ?? ''),
+            ':preco' => (float)$dados['preco'],
+            ':destaque' => $destaque
+        ]);
+
+        echo json_encode(['sucesso' => true, 'mensagem' => 'Item criado com sucesso!']);
+        exit;
+    }
+
+    // 7. Editar Produto
+    if ($acao === 'editar_produto') {
+        $id = (int)$dados['id'];
+        $destaque = !empty($dados['destaque_dia']) ? 1 : 0;
+        if ($destaque === 1) {
+            $pdo->prepare("UPDATE produtos SET destaque_dia = 0 WHERE estabelecimento_id = :estab")->execute([':estab' => $estabId]);
+        }
+
+        $stmt = $pdo->prepare("
+            UPDATE produtos 
+            SET categoria_id = :cat, nome = :nome, descricao = :desc, preco = :preco, destaque_dia = :destaque
+            WHERE id = :id AND estabelecimento_id = :estab
+        ");
+        $stmt->execute([
+            ':cat' => (int)$dados['categoria_id'],
+            ':nome' => trim($dados['nome']),
+            ':desc' => trim($dados['descricao'] ?? ''),
+            ':preco' => (float)$dados['preco'],
+            ':destaque' => $destaque,
+            ':id' => $id,
+            ':estab' => $estabId
+        ]);
+
+        echo json_encode(['sucesso' => true, 'mensagem' => 'Item atualizado com sucesso!']);
+        exit;
+    }
+
+    // 8. Excluir Produto
+    if ($acao === 'excluir_produto') {
+        $id = (int)($dados['id'] ?? 0);
+        $stmt = $pdo->prepare("DELETE FROM produtos WHERE id = :id AND estabelecimento_id = :estab");
+        $stmt->execute([':id' => $id, ':estab' => $estabId]);
+
+        echo json_encode(['sucesso' => true]);
+        exit;
+    }
+
+    echo json_encode(['sucesso' => false, 'erro' => 'Ação inválida.']);
 
 } catch (Exception $e) {
-    error_log('gerenciar_produto.php: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['sucesso' => false, 'erro' => 'Erro ao processar a solicitação.']);
+    echo json_encode(['sucesso' => false, 'erro' => $e->getMessage()]);
 }

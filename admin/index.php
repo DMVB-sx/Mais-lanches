@@ -23,17 +23,23 @@ if ($estab) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="pt-BR" class="dark">
-<head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Painel <?= htmlspecialchars($nomeEstab) ?></title>
+    <title>Painel - <?= htmlspecialchars($nomeEstab) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <?php
-        require_once __DIR__ . '/../includes/tema.php';
-        tema_imprimirTailwindConfig($estab);
-    ?>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce' },
+                        dark: { base: '#0B0914', surface: '#141021', card: '#1C172E', border: 'rgba(255, 255, 255, 0.08)' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -48,19 +54,14 @@ if ($estab) {
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
 
-    <!-- Top Header -->
+    <!-- Top Header Limpo -->
     <header class="sticky top-0 z-40 bg-dark-surface/90 backdrop-blur-md border-b border-dark-border px-4 sm:px-6 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
             
             <div class="flex items-center gap-3">
-                <?php $logoAdmin = tema_logoSrc($estab, '../'); ?>
                 <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-600 to-fuchsia-500 p-0.5 shadow-lg flex items-center justify-center shrink-0">
                     <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
-                        <?php if ($logoAdmin): ?>
-                            <img src="<?= htmlspecialchars($logoAdmin) ?>" alt="Logo" class="w-full h-full object-cover">
-                        <?php else: ?>
-                            <img src="../assets/img/logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='../assets/img/logo.jpg';">
-                        <?php endif; ?>
+                        <img src="../assets/img/logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='../assets/img/logo.jpg';">
                     </div>
                 </div>
                 <h1 class="text-sm font-extrabold text-white tracking-tight flex items-center gap-2">
@@ -70,31 +71,25 @@ if ($estab) {
             </div>
 
             <div class="flex items-center gap-2">
+                <!-- Status da Loja -->
                 <button onclick="alternarStatusLoja()" id="btn-status-loja" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border active:scale-95">
                     <i class="fa-solid fa-store text-xs"></i>
                     <span id="txt-status-loja">Carregando...</span>
                 </button>
 
-                <a href="marketing.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 border border-brand-500/20 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-bullhorn text-xs"></i>
-                    <span class="hidden sm:inline">Transmissão</span>
-                </a>
-
+                <!-- Central WhatsApp Unificada (Transmissão + Conexão) -->
                 <a href="whatsapp.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition flex items-center gap-1.5">
                     <i class="fa-brands fa-whatsapp text-xs"></i>
                     <span class="hidden sm:inline">WhatsApp</span>
                 </a>
 
+                <!-- Gestão de Cardápio e Estoque -->
                 <a href="cardapio.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5">
                     <i class="fa-solid fa-utensils text-xs"></i>
                     <span class="hidden sm:inline">Cardápio</span>
                 </a>
 
-                <a href="configuracoes.php?estab=<?= $estabId ?>" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-dark-border transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-palette text-xs"></i>
-                    <span class="hidden sm:inline">Visual</span>
-                </a>
-
+                <!-- Sair -->
                 <a href="logout.php" title="Sair" class="w-8 h-8 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 flex items-center justify-center transition">
                     <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                 </a>
@@ -107,7 +102,7 @@ if ($estab) {
     <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 overflow-x-auto">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 min-w-[300px]">
             
-            <!-- Novos Pedidos -->
+            <!-- Coluna 1: Novos Pedidos -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -119,7 +114,7 @@ if ($estab) {
                 <div id="col-novo" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
-            <!-- Na Cozinha / Preparo -->
+            <!-- Coluna 2: Na Cozinha / Preparo -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -131,7 +126,7 @@ if ($estab) {
                 <div id="col-em_preparo" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
-            <!-- Em Entrega / Balcão -->
+            <!-- Coluna 3: Em Entrega / Balcão -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -143,7 +138,7 @@ if ($estab) {
                 <div id="col-saiu_entrega" class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1"></div>
             </div>
 
-            <!-- Finalizados Hoje -->
+            <!-- Coluna 4: Finalizados Hoje -->
             <div class="flex flex-col bg-dark-surface border border-dark-border rounded-3xl p-3.5 min-h-[500px]">
                 <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-border">
                     <div class="flex items-center gap-2">
@@ -215,7 +210,7 @@ if ($estab) {
 
                     Swal.fire({
                         title: lojaAberta ? 'Loja Aberta! 🎉' : 'Loja Fechada! 🔒',
-                        text: lojaAberta ? 'O cardápio está aberto para novos pedidos.' : 'O cardápio foi fechado.',
+                        text: lojaAberta ? 'O cardápio está liberado para novos pedidos.' : 'O cardápio foi fechado.',
                         icon: 'success',
                         toast: true,
                         position: 'top-end',
@@ -264,10 +259,9 @@ if ($estab) {
             pedidos.forEach(p => {
                 const st = (p.status || 'novo').toLowerCase();
                 
-                // Ignora pedidos arquivados (removidos da tela)
-                if (st === 'arquivado') return;
+                // Pedidos arquivados ou aguardando PIX não entram no Kanban
+                if (st === 'arquivado' || st === 'aguardando_pagamento' || st === 'cancelado') return;
 
-                // Garante que só vá para uma coluna válida
                 const colunaDestino = cols[st];
                 if (!colunaDestino) return;
 
@@ -304,12 +298,8 @@ if ($estab) {
         }
 
         function criarCardPedido(p) {
-            const st = (p.status || 'novo').toLowerCase();
-            const nomeClienteSeguro = (p.cliente_nome || 'Cliente').replace(/'/g, "\\'");
-            const pagamentoPendente = (p.forma_pagamento || '').toLowerCase() === 'pix' && p.status_pagamento === 'pendente';
-
             const card = document.createElement('div');
-            card.className = `bg-dark-card border rounded-2xl p-3.5 shadow-lg transition space-y-3 ${pagamentoPendente ? 'border-amber-500/60 shadow-amber-950/30' : 'border-dark-border hover:border-brand-500/40'}`;
+            card.className = 'bg-dark-card border border-dark-border rounded-2xl p-3.5 shadow-lg hover:border-brand-500/40 transition space-y-3';
 
             let dataFormatada = '--:--';
             if (p.criado_em) {
@@ -335,14 +325,8 @@ if ($estab) {
             }
 
             let botoesAcao = '';
-
-            if (pagamentoPendente) {
-                botoesAcao = `
-                    <button onclick="confirmarPagamentoPix(${p.id}, '${nomeClienteSeguro}')" class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-black font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-money-bill-transfer"></i> Confirmar Pagamento Pix
-                    </button>
-                `;
-            } else if (st === 'novo') {
+            const st = (p.status || 'novo').toLowerCase();
+            if (st === 'novo') {
                 botoesAcao = `
                     <button onclick="mudarStatusPedido(${p.id}, 'em_preparo')" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs transition active:scale-95 flex items-center justify-center gap-1.5">
                         <i class="fa-solid fa-fire-burner"></i> Iniciar Preparo
@@ -362,6 +346,8 @@ if ($estab) {
                 `;
             }
 
+            const nomeClienteSeguro = (p.cliente_nome || 'Cliente').replace(/'/g, "\\'");
+
             card.innerHTML = `
                 <div class="flex items-start justify-between gap-2 border-b border-dark-border pb-2.5">
                     <div>
@@ -369,26 +355,23 @@ if ($estab) {
                             <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isDelivery ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
                                 <i class="fa-solid ${isDelivery ? 'fa-motorcycle' : 'fa-store'} text-[9px]"></i> ${isDelivery ? 'Delivery' : 'Retirada no Balcão'}
                             </span>
-                            ${pagamentoPendente ? `
-                                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
-                                    <i class="fa-solid fa-clock text-[9px]"></i> Aguardando Pix
-                                </span>
-                            ` : ''}
                         </div>
                         <p class="text-sm font-extrabold text-white mt-1">${p.cliente_nome || 'Cliente'}</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] text-slate-400 font-mono font-bold">${dataFormatada}</span>
-                        <!-- Botão de Limpar da Tela -->
-                        <button onclick="removerPedidoDaTela(${p.id}, '${nomeClienteSeguro}')" title="Limpar pedido da tela" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 flex items-center justify-center transition">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] text-slate-400 font-mono font-bold mr-1">${dataFormatada}</span>
+                        
+                        <!-- Botão Imprimir Cupom Térmico -->
+                        <button onclick="window.open('imprimir_pedido.php?id=${p.id}&estab=${estabId}', '_blank')" title="Imprimir Cupom" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-white/20 text-slate-300 border border-white/10 flex items-center justify-center transition">
+                            <i class="fa-solid fa-print text-[11px]"></i>
+                        </button>
+
+                        <!-- Botão Limpar da Tela -->
+                        <button onclick="removerPedidoDaTela(${p.id}, '${nomeClienteSeguro}')" title="Limpar da tela" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 flex items-center justify-center transition">
                             <i class="fa-solid fa-xmark text-[11px]"></i>
                         </button>
-                        <a href="imprimir_pedido.php?id=${p.id}&estab=${estabId}" target="_blank" title="Imprimir pedido" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-brand-500/20 text-slate-400 hover:text-brand-400 border border-white/10 flex items-center justify-center transition">
-                            <i class="fa-solid fa-print text-[11px]"></i>
-                        </a>
                     </div>
                 </div>
-                
 
                 <div class="bg-[#141021] p-2.5 rounded-xl border border-white/5 space-y-1">
                     ${itensHtml}
@@ -408,7 +391,7 @@ if ($estab) {
 
                     ${!isDelivery ? `
                         <div class="pt-1 text-[10px] text-amber-300 border-t border-white/5">
-                            <i class="fa-solid fa-store text-amber-400"></i> O cliente irá retirar no balcão
+                            <i class="fa-solid fa-store text-amber-400"></i> Retirada no balcão
                         </div>
                     ` : ''}
 
@@ -442,49 +425,18 @@ if ($estab) {
             } catch (err) {}
         }
 
-        // Confirmação manual do Pix — usada quando a loja ainda não conectou
-        // o Mercado Pago (ou como conferência extra). Só use depois de ver
-        // o dinheiro cair de verdade no aplicativo do banco.
-        async function confirmarPagamentoPix(pedidoId, nomeCliente) {
-            const confirmacao = await Swal.fire({
-                icon: 'question',
-                title: `Confirmar recebimento do Pix?`,
-                html: `Confirme só depois de ver o Pix de <b>${nomeCliente}</b> cair no seu banco.`,
-                showCancelButton: true,
-                confirmButtonText: 'Sim, já recebi',
-                cancelButtonText: 'Ainda não',
-                confirmButtonColor: '#16a34a',
-                background: '#141021',
-                color: '#fff'
-            });
-            if (!confirmacao.isConfirmed) return;
-
-            try {
-                const res = await fetch(`../api/pedidos.php?estab=${estabId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pedido_id: pedidoId, acao: 'confirmar_pagamento_pix' })
-                });
-                const data = await res.json();
-                if (data && data.sucesso) carregarPedidos();
-            } catch (err) {}
-        }
-
-        // Despacha ou avisa que está pronto no balcão, com mensagem personalizada para o WhatsApp
         async function despacharOuAvisarPronto(pedidoId, tipoEntrega, nomeEncoded, wppEncoded) {
             const nome = decodeURIComponent(nomeEncoded);
             const wpp = decodeURIComponent(wppEncoded).replace(/\D/g, '');
             const isDelivery = (tipoEntrega === 'delivery');
 
-            // Primeiro atualiza o status para a coluna 3 (saiu_entrega)
             await mudarStatusPedido(pedidoId, 'saiu_entrega');
 
-            // Mensagem personalizada conforme o tipo de entrega
             let textoMsg = '';
             if (isDelivery) {
                 textoMsg = `Olá, *${nome}*! Seu pedido acabou de sair para entrega e está a caminho da sua casa! 🛵💨`;
             } else {
-                textoMsg = `Olá, *${nome}*! Seu pedido já está prontinho e te aguardando para retirada no nosso balcão! 🍔🍕`;
+                textoMsg = `Olá, *${nome}*! Seu pedido já está pronto e aguardando para retirada no balcão! 🍔🍕`;
             }
 
             if (wpp) {
@@ -507,7 +459,6 @@ if ($estab) {
             }
         }
 
-        // Remove o card da tela de forma clara e sem termos técnicos
         async function removerPedidoDaTela(pedidoId, nomeCliente) {
             const conf = await Swal.fire({
                 title: `Limpar pedido de ${nomeCliente}?`,

@@ -1,5 +1,5 @@
 <?php
-// cardapio.php
+// cardapio.php - Redesign SaaS com Categorias 100% Visíveis e Rolagem Direta
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 
@@ -7,7 +7,7 @@ require_once __DIR__ . '/config/conexao.php';
 
 $estabId = isset($_GET['estab']) ? (int)$_GET['estab'] : 1;
 
-$stmtEstab = $pdo->prepare("SELECT * FROM estabelecimentos WHERE id = :id");
+$stmtEstab = $pdo->prepare("SELECT * FROM estabelecimentos WHERE id = :id LIMIT 1");
 $stmtEstab->execute([':id' => $estabId]);
 $estab = $stmtEstab->fetch(PDO::FETCH_ASSOC);
 
@@ -15,7 +15,6 @@ if (!$estab) {
     die("<div style='min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0B0914; color:#fff; font-family:sans-serif;'><h2>Estabelecimento indisponível.</h2></div>");
 }
 
-// Identifica se a loja está aberta inicialmente
 $lojaAbertaInicial = false;
 if (isset($estab['status'])) {
     $lojaAbertaInicial = ($estab['status'] === 'aberto' || $estab['status'] === '1' || $estab['status'] === 1);
@@ -23,23 +22,22 @@ if (isset($estab['status'])) {
     $lojaAbertaInicial = ((int)$estab['aberto'] === 1);
 }
 
-// Busca o produto marcado como destaque da semana/dia (se existir)
+// Especial da Semana
 $especialDoDia = null;
 try {
-    $stmtDestaque = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab AND destaque_dia = 1 LIMIT 1");
+    $stmtDestaque = $pdo->prepare("SELECT * FROM produtos WHERE estabelecimento_id = :estab AND destaque_dia = 1 AND disponivel = 1 LIMIT 1");
     $stmtDestaque->execute([':estab' => $estabId]);
     $especialDoDia = $stmtDestaque->fetch(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    // Caso a coluna ainda não tenha sido criada no banco
     $especialDoDia = null;
 }
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR" class="dark scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title><?= htmlspecialchars($estab['nome']) ?> - Cardápio & Delivery</title>
+    <title><?= htmlspecialchars($estab['nome']) ?> - Cardápio Online</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <?php
@@ -56,7 +54,6 @@ try {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <style>
         body {
@@ -111,9 +108,16 @@ try {
             border-radius: 999px;
             margin: 12px auto 6px;
         }
+
+        .cat-tab-ativa {
+            background: linear-gradient(135deg, #9333ea, #c026d3) !important;
+            color: #ffffff !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            box-shadow: 0 4px 18px rgba(168, 85, 247, 0.45);
+        }
     </style>
 </head>
-<body class="min-h-screen antialiased flex justify-center selection:bg-brand-500 selection:text-white">
+<body class="min-h-screen antialiased flex justify-center selection:bg-purple-600 selection:text-white">
 
     <div class="w-full max-w-lg min-h-screen bg-dark-base relative pb-32 flex flex-col">
 
@@ -121,8 +125,7 @@ try {
         <header class="relative px-4 pt-8 pb-5 text-center bg-gradient-to-b from-purple-950/40 via-dark-surface to-dark-base border-b border-white/5">
             <div class="flex flex-col items-center">
                 
-                <!-- Logo -->
-                <div class="relative w-28 h-28 rounded-full bg-gradient-to-tr from-brand-600 via-fuchsia-500 to-purple-400 p-[3px] shadow-2xl shadow-purple-950/90 mb-3 flex items-center justify-center">
+                <div class="relative w-24 h-24 rounded-full bg-gradient-to-tr from-purple-600 via-fuchsia-500 to-purple-400 p-[3px] shadow-2xl shadow-purple-950/90 mb-3 flex items-center justify-center">
                     <div class="w-full h-full bg-[#0B0914] rounded-full flex items-center justify-center overflow-hidden">
                         <?php 
                             $logoEstab = (function_exists('tema_logoSrc')) ? tema_logoSrc($estab) : null;
@@ -132,98 +135,97 @@ try {
                                  alt="Logo <?= htmlspecialchars($estab['nome']) ?>"
                                  class="w-full h-full object-cover"
                                  onerror="this.style.display='none'; document.getElementById('fallback-icon').style.display='block';">
-                            <span id="fallback-icon" class="text-4xl hidden">🍔</span>
+                            <i id="fallback-icon" class="fa-solid fa-utensils text-2xl text-purple-400 hidden"></i>
                         <?php else: ?>
                             <img src="assets/img/logo.png"
                                  alt="Logo <?= htmlspecialchars($estab['nome']) ?>"
                                  class="w-full h-full object-cover"
                                  onerror="this.onerror=null; this.src='assets/img/logo.jpg'; this.onerror=() => { this.style.display='none'; document.getElementById('fallback-icon').style.display='block'; };">
-                            <span id="fallback-icon" class="text-4xl hidden">🍔</span>
+                            <i id="fallback-icon" class="fa-solid fa-utensils text-2xl text-purple-400 hidden"></i>
                         <?php endif; ?>
                     </div>
                 </div>
 
-                <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight"><?= htmlspecialchars($estab['nome']) ?></h1>
+                <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight"><?= htmlspecialchars($estab['nome']) ?></h1>
 
-                <!-- Badge de Status -->
-                <div id="badge-status-container" class="flex items-center gap-2 mt-2.5">
-                    <span id="badge-status" class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-bold <?= $lojaAbertaInicial ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20' ?>">
+                <div id="badge-status-container" class="flex items-center gap-2 mt-2">
+                    <span id="badge-status" class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold <?= $lojaAbertaInicial ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20' ?>">
                         <span class="w-2 h-2 rounded-full <?= $lojaAbertaInicial ? 'bg-emerald-400 animate-pulse' : 'bg-red-500' ?>"></span>
                         <span id="texto-status-loja"><?= $lojaAbertaInicial ? 'Aberto agora' : 'Fechado no momento' ?></span>
                     </span>
                 </div>
 
-                <!-- Banner Informativo de Horário -->
-                <div id="banner-fechado" class="<?= $lojaAbertaInicial ? 'hidden' : '' ?> mt-3.5 w-full bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-xs text-amber-300 flex items-center justify-center gap-2">
+                <div id="banner-fechado" class="<?= $lojaAbertaInicial ? 'hidden' : '' ?> mt-3 w-full bg-amber-500/10 border border-amber-500/20 rounded-2xl p-2.5 text-xs text-amber-300 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-clock text-amber-400"></i>
                     <span>Horário de funcionamento: <strong>18:00 às 22:30</strong></span>
                 </div>
             </div>
         </header>
 
-        <!-- Banner de Destaque Especial do Dia / Semana -->
+        <!-- Banner Especial do Dia / Semana -->
         <?php if ($especialDoDia): ?>
         <div class="px-4 pt-4">
-            <div class="relative overflow-hidden bg-gradient-to-r from-purple-950/80 via-dark-surface to-[#1F1635] border border-brand-500/40 rounded-3xl p-4 shadow-xl flex items-center justify-between gap-3 group">
+            <div class="relative overflow-hidden bg-gradient-to-r from-purple-950/90 via-[#1C1630] to-dark-surface border border-purple-500/40 rounded-3xl p-4 shadow-xl flex items-center justify-between gap-3 group">
                 <div class="space-y-1 flex-1 pr-1 z-10">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/20 text-brand-300 border border-brand-500/30 animate-pulse">
-                        <i class="fa-solid fa-star text-amber-400 text-[9px]"></i> Especial da Semana
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <i class="fa-solid fa-star text-amber-400 text-[9px]"></i> Destaque da Semana
                     </span>
                     <h3 class="text-sm font-extrabold text-white mt-1"><?= htmlspecialchars($especialDoDia['nome']) ?></h3>
                     <?php if (!empty($especialDoDia['descricao'])): ?>
                         <p class="text-xs text-slate-400 line-clamp-2"><?= htmlspecialchars($especialDoDia['descricao']) ?></p>
                     <?php endif; ?>
-                    <p class="text-sm font-black text-brand-400 pt-0.5">
+                    <p class="text-sm font-black text-purple-400 pt-0.5">
                         R$ <?= number_format($especialDoDia['preco'], 2, ',', '.') ?>
                     </p>
                 </div>
-                <button type="button" onclick="clicouNoProduto(<?= (int)$especialDoDia['id'] ?>)" class="z-10 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-500 hover:to-fuchsia-500 text-white font-extrabold rounded-2xl text-xs transition active:scale-95 shadow-lg shrink-0 flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus text-[10px]"></i> Quero Este!
+                <button type="button" onclick="clicouNoProduto(<?= (int)$especialDoDia['id'] ?>)" class="z-10 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 text-white font-extrabold rounded-2xl text-xs transition active:scale-95 shadow-lg shrink-0 flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Adicionar
                 </button>
-                <div class="absolute -right-4 -bottom-4 text-7xl opacity-5 pointer-events-none select-none">
-                    ⭐
+                <div class="absolute -right-3 -bottom-3 text-7xl opacity-5 pointer-events-none select-none text-amber-400">
+                    <i class="fa-solid fa-star"></i>
                 </div>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- Grade de Categorias com Emojis -->
-        <div class="sticky top-0 z-40 bg-dark-base/95 backdrop-blur-md border-b border-white/5 py-3.5 px-4 mt-2">
-            <nav class="flex flex-wrap gap-2 justify-center" id="nav-categorias"></nav>
+        <!-- Navegação com Todas as Categorias Visíveis no Topo (flex-wrap) -->
+        <div id="barra-topo-categorias" class="sticky top-0 z-40 bg-dark-base/95 backdrop-blur-md border-b border-white/5 py-3 px-3 shadow-md">
+            <nav class="flex flex-wrap gap-2 justify-center items-center" id="nav-categorias"></nav>
         </div>
 
-        <!-- Lista de Produtos -->
-        <main class="flex-1 p-4 space-y-4" id="container-cardapio">
+        <!-- Feed Contínuo com os Itens -->
+        <main class="flex-1 p-4 space-y-8" id="container-cardapio">
             <div class="text-center py-24 text-slate-500 text-xs flex flex-col items-center gap-2">
-                <i class="fa-solid fa-spinner fa-spin text-xl text-brand-500"></i>
-                <span>Carregando cardápio...</span>
+                <i class="fa-solid fa-spinner fa-spin text-xl text-purple-500"></i>
+                <span>Carregando opções do cardápio...</span>
             </div>
         </main>
 
     </div>
 
-    <!-- Botão Flutuante da Sacola -->
+    <!-- Barra Inferior Flutuante da Sacola -->
     <div class="fixed bottom-5 left-0 right-0 px-4 z-50 flex justify-center pointer-events-none">
-        <button id="btn-flutuante" class="w-full max-w-md bg-gradient-to-r from-brand-600 to-fuchsia-600 hover:from-brand-700 hover:to-fuchsia-700 text-white font-bold p-4 rounded-2xl shadow-2xl shadow-purple-950/90 pointer-events-auto hidden justify-between items-center transition-all duration-200 active:scale-95" onclick="abrirModal('gaveta-carrinho')">
+        <button id="btn-flutuante" class="w-full max-w-md bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 text-white font-bold p-3.5 sm:p-4 rounded-2xl shadow-2xl shadow-purple-950/90 pointer-events-auto hidden justify-between items-center transition-all duration-200 active:scale-95" onclick="abrirModal('gaveta-carrinho')">
             <div class="flex items-center gap-2.5">
                 <span id="flutuante-qtd" class="bg-black/30 text-white font-bold text-xs px-2.5 py-1 rounded-xl">0 itens</span>
-                <span class="text-sm font-bold flex items-center gap-1.5"><i class="fa-solid fa-bag-shopping"></i> Ver Sacola</span>
+                <span class="text-xs sm:text-sm font-bold flex items-center gap-1.5"><i class="fa-solid fa-bag-shopping"></i> Ver Sacola</span>
             </div>
-            <span id="flutuante-total" class="text-base font-extrabold text-white">R$ 0,00</span>
+            <span id="flutuante-total" class="text-sm sm:text-base font-extrabold text-white">R$ 0,00</span>
         </button>
     </div>
 
     <!-- Overlay Global -->
     <div id="modal-overlay" class="sheet-backdrop" onclick="fecharTodosModais()"></div>
 
-    <!-- Modal 1: Montador de Pizza -->
+    <!-- Modal: Montador de Pizza -->
     <div id="gaveta-pizza" class="sheet-content">
         <div class="sheet-handle"></div>
-        
         <div class="p-4 border-b border-white/5 flex justify-between items-center">
             <div>
-                <h3 id="pizza-modal-titulo" class="text-base font-bold text-white">Monte sua Pizza 🍕</h3>
-                <p id="pizza-modal-limite" class="text-xs text-brand-500 font-medium">Escolha até 2 sabores</p>
+                <h3 id="pizza-modal-titulo" class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-pizza-slice text-amber-400"></i> Monte sua Pizza
+                </h3>
+                <p id="pizza-modal-limite" class="text-xs text-purple-400 font-medium">Escolha até 2 sabores</p>
             </div>
             <button onclick="fecharTodosModais()" class="w-8 h-8 rounded-full bg-white/5 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">
                 <i class="fa-solid fa-xmark"></i>
@@ -231,9 +233,9 @@ try {
         </div>
 
         <div class="p-4 overflow-y-auto flex-1 space-y-4">
-            <div class="p-3 bg-brand-900/30 border border-brand-500/20 rounded-xl text-xs text-brand-100 flex items-center gap-2">
-                <i class="fa-solid fa-info-circle text-brand-500 text-sm"></i>
-                <span>O valor final é cobrado pelo <strong>sabor de maior valor</strong> escolhido.</span>
+            <div class="p-3 bg-purple-900/30 border border-purple-500/20 rounded-xl text-xs text-purple-100 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-purple-400 text-sm"></i>
+                <span>O valor final é cobrado pelo <strong>sabor de maior valor</strong>.</span>
             </div>
 
             <div id="container-sabores-pizza" class="space-y-4"></div>
@@ -249,49 +251,48 @@ try {
                 <div class="space-y-2" id="opcoes-borda-radios">
                     <label class="flex justify-between items-center py-2 border-b border-white/5 text-xs cursor-pointer item-radio-borda">
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="borda_pizza" value="Sem borda recheada" data-preco="0" checked onchange="calcularTotalPizza()" class="accent-brand-500">
+                            <input type="radio" name="borda_pizza" value="Sem borda recheada" data-preco="0" checked onchange="calcularTotalPizza()" class="accent-purple-500">
                             <span class="text-slate-300">Sem borda recheada</span>
                         </div>
                         <span class="text-slate-500">Grátis</span>
                     </label>
                     <label class="flex justify-between items-center py-2 border-b border-white/5 text-xs cursor-pointer item-radio-borda">
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="borda_pizza" value="Borda de Catupiry" data-preco="8.00" onchange="calcularTotalPizza()" class="accent-brand-500">
+                            <input type="radio" name="borda_pizza" value="Borda de Catupiry" data-preco="8.00" onchange="calcularTotalPizza()" class="accent-purple-500">
                             <span class="text-slate-300">Borda de Catupiry</span>
                         </div>
-                        <strong class="text-brand-500">+ R$ 8,00</strong>
+                        <strong class="text-purple-400">+ R$ 8,00</strong>
                     </label>
                     <label class="flex justify-between items-center py-2 text-xs cursor-pointer item-radio-borda">
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="borda_pizza" value="Borda de Cheddar" data-preco="8.00" onchange="calcularTotalPizza()" class="accent-brand-500">
+                            <input type="radio" name="borda_pizza" value="Borda de Cheddar" data-preco="8.00" onchange="calcularTotalPizza()" class="accent-purple-500">
                             <span class="text-slate-300">Borda de Cheddar</span>
                         </div>
-                        <strong class="text-brand-500">+ R$ 8,00</strong>
+                        <strong class="text-purple-400">+ R$ 8,00</strong>
                     </label>
                 </div>
             </div>
 
             <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Alguma observação?</label>
-                <textarea id="obs-pizza" placeholder="Ex: Massa fininha, caprichar no orégano..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-brand-500 transition"></textarea>
+                <textarea id="obs-pizza" placeholder="Ex: Massa fininha, caprichar no orégano..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500 transition"></textarea>
             </div>
         </div>
 
         <div class="p-4 border-t border-white/5 bg-dark-surface">
-            <button type="button" class="w-full bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95" onclick="confirmarAdicaoPizza()">
+            <button type="button" class="w-full bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95" onclick="confirmarAdicaoPizza()">
                 Adicionar • <span id="total-pizza-customizada">R$ 0,00</span>
             </button>
         </div>
     </div>
 
-    <!-- Modal 2: Adicionais Lanche -->
+    <!-- Modal: Adicionais Lanches -->
     <div id="gaveta-adicionais" class="sheet-content">
         <div class="sheet-handle"></div>
-        
         <div class="p-4 border-b border-white/5 flex justify-between items-center">
             <div>
                 <h3 id="modal-item-nome" class="text-base font-bold text-white">Personalizar Item</h3>
-                <p id="modal-item-preco-base" class="text-xs text-brand-500 font-medium">R$ 0,00</p>
+                <p id="modal-item-preco-base" class="text-xs text-purple-400 font-medium">R$ 0,00</p>
             </div>
             <button onclick="fecharTodosModais()" class="w-8 h-8 rounded-full bg-white/5 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">
                 <i class="fa-solid fa-xmark"></i>
@@ -303,24 +304,23 @@ try {
 
             <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Alguma observação?</label>
-                <textarea id="obs-item-customizado" placeholder="Ex: Sem salada, molho à parte..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-brand-500 transition"></textarea>
+                <textarea id="obs-item-customizado" placeholder="Ex: Sem salada, molho à parte..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500 transition"></textarea>
             </div>
         </div>
 
         <div class="p-4 border-t border-white/5 bg-dark-surface">
-            <button type="button" class="w-full bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95" onclick="confirmarAdicaoItem()">
+            <button type="button" class="w-full bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95" onclick="confirmarAdicaoItem()">
                 Adicionar • <span id="total-item-customizado">R$ 0,00</span>
             </button>
         </div>
     </div>
 
-    <!-- Modal 3: Sacola / Finalização -->
+    <!-- Modal: Sacola e Finalização -->
     <div id="gaveta-carrinho" class="sheet-content">
         <div class="sheet-handle"></div>
-        
         <div class="p-4 border-b border-white/5 flex justify-between items-center">
             <h3 class="text-base font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-bag-shopping text-brand-500"></i> Sua Sacola
+                <i class="fa-solid fa-bag-shopping text-purple-400"></i> Sua Sacola
             </h3>
             <button onclick="fecharTodosModais()" class="w-8 h-8 rounded-full bg-white/5 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">
                 <i class="fa-solid fa-xmark"></i>
@@ -333,17 +333,17 @@ try {
             <form id="form-pedido" onsubmit="finalizarPedido(event)" class="space-y-3 pt-2">
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Seu Nome *</label>
-                    <input type="text" id="cli-nome" required placeholder="Como podemos te chamar?" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                    <input type="text" id="cli-nome" required placeholder="Ex: Daniel" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Seu WhatsApp *</label>
-                    <input type="tel" id="cli-whatsapp" required placeholder="DDD + Número (ex: 75988887777)" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                    <input type="tel" id="cli-whatsapp" required placeholder="DDD + Número (ex: 75988887777)" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Entrega</label>
-                    <select id="tipo-entrega" onchange="atualizarTotais()" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500 font-medium">
+                    <select id="tipo-entrega" onchange="atualizarTotais()" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500 font-medium">
                         <option value="delivery">🛵 Delivery (+ R$ <?= number_format($estab['taxa_entrega_padrao'], 2, ',', '.') ?>)</option>
                         <option value="retirada">🏪 Retirada no Balcão (Grátis)</option>
                     </select>
@@ -352,23 +352,23 @@ try {
                 <div id="bloco-endereco" class="space-y-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-300 mb-1">Rua e Número *</label>
-                        <input type="text" id="cli-endereco" placeholder="Ex: Rua Barão do Rio Branco, 450" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                        <input type="text" id="cli-endereco" placeholder="Ex: Rua Barão do Rio Branco, 450" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Bairro *</label>
-                            <input type="text" id="cli-bairro" placeholder="Ex: Centro" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                            <input type="text" id="cli-bairro" placeholder="Ex: Centro" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-300 mb-1">Complemento</label>
-                            <input type="text" id="cli-complemento" placeholder="Apt, Casa..." class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                            <input type="text" id="cli-complemento" placeholder="Apt, Casa..." class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                         </div>
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Forma de Pagamento *</label>
-                    <select id="forma-pagamento" onchange="alternarTroco()" required class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500 font-medium">
+                    <select id="forma-pagamento" onchange="alternarTroco()" required class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500 font-medium">
                         <option value="pix">PIX</option>
                         <option value="cartao_credito">Cartão de Crédito</option>
                         <option value="cartao_debito">Cartão de Débito</option>
@@ -378,12 +378,12 @@ try {
 
                 <div id="bloco-troco" class="hidden">
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Troco para quanto?</label>
-                    <input type="number" step="0.01" id="troco-para" placeholder="Ex: 50.00" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-brand-500">
+                    <input type="number" step="0.01" id="troco-para" placeholder="Ex: 50.00" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white outline-none focus:border-purple-500">
                 </div>
 
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 mb-1">Observações Gerais</label>
-                    <textarea id="obs-pedido" placeholder="Ex: Tocar a campainha..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-brand-500"></textarea>
+                    <textarea id="obs-pedido" placeholder="Ex: Tocar a campainha..." rows="2" class="w-full p-3 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500"></textarea>
                 </div>
             </form>
         </div>
@@ -400,17 +400,17 @@ try {
                 </div>
                 <div class="flex justify-between text-sm font-extrabold text-white pt-1.5 border-t border-white/5">
                     <span>Total:</span>
-                    <span id="modal-total" class="text-brand-500 font-black">R$ 0,00</span>
+                    <span id="modal-total" class="text-purple-400 font-black">R$ 0,00</span>
                 </div>
             </div>
 
-            <button type="button" onclick="document.getElementById('form-pedido').requestSubmit()" id="btn-submit" class="w-full bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95 shadow-xl shadow-purple-950/60">
+            <button type="button" onclick="document.getElementById('form-pedido').requestSubmit()" id="btn-submit" class="w-full bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-extrabold p-3.5 rounded-xl text-sm flex justify-center items-center gap-2 transition active:scale-95 shadow-xl shadow-purple-950/60">
                 <i class="fa-solid fa-check"></i> Concluir Pedido
             </button>
         </div>
     </div>
 
-    <!-- Script de Funcionamento -->
+    <!-- Script de Rolagem e Navegação Instantânea -->
     <script>
         const estabId = <?= $estab['id'] ?>;
         const taxaPadraoEstab = <?= (float)$estab['taxa_entrega_padrao'] ?>;
@@ -420,11 +420,11 @@ try {
         let cardapioCompleto = [];
         let pizzaSabores = [];
         let produtosCatalogo = [];
-        let categoriaAtivaId = null;
         let carrinho = [];
 
         let pizzaEmMontagem = null;
         let produtoSendoCustomizado = null;
+        let navegandoPorClique = false;
 
         const Toast = Swal.mixin({
             toast: true,
@@ -433,35 +433,34 @@ try {
             timer: 1500
         });
 
-        function obterEmojiCategoria(nome) {
+        function obterConfigCategoria(nome) {
             const n = nome.toLowerCase();
-            if (n.includes('sanduíche') || n.includes('sanduiche') || n.includes('tradicionais')) return '🥪';
-            if (n.includes('hambúrguer') || n.includes('hamburguer') || n.includes('artesanais')) return '🍔';
-            if (n.includes('sal') || n.includes('sanduba')) return '🥖';
-            if (n.includes('combo') || n.includes('porç') || n.includes('porc')) return '🍟';
-            if (n.includes('pizza')) return '🍕';
-            if (n.includes('bebida') || n.includes('refri')) return '🥤';
-            if (n.includes('sobremesa') || n.includes('doce')) return '🍰';
-            return '🍽️';
+            if (n.includes('especial')) return { icone: 'fa-star', corBg: 'bg-amber-500/10', corTexto: 'text-amber-400' };
+            if (n.includes('sanduíche') || n.includes('sanduiche') || n.includes('tradicionais')) return { icone: 'fa-bread-slice', corBg: 'bg-orange-500/10', corTexto: 'text-orange-400' };
+            if (n.includes('hambúrguer') || n.includes('hamburguer') || n.includes('artesanais')) return { icone: 'fa-burger', corBg: 'bg-amber-500/10', corTexto: 'text-amber-400' };
+            if (n.includes('sal') || n.includes('sanduba')) return { icone: 'fa-hotdog', corBg: 'bg-yellow-500/10', corTexto: 'text-yellow-400' };
+            if (n.includes('combo') || n.includes('porç') || n.includes('porc')) return { icone: 'fa-box-archive', corBg: 'bg-red-500/10', corTexto: 'text-red-400' };
+            if (n.includes('pizza')) return { icone: 'fa-pizza-slice', corBg: 'bg-rose-500/10', corTexto: 'text-rose-400' };
+            if (n.includes('bebida') || n.includes('refri')) return { icone: 'fa-wine-bottle', corBg: 'bg-cyan-500/10', corTexto: 'text-cyan-400' };
+            if (n.includes('sobremesa') || n.includes('doce')) return { icone: 'fa-ice-cream', corBg: 'bg-pink-500/10', corTexto: 'text-pink-400' };
+            return { icone: 'fa-utensils', corBg: 'bg-purple-500/10', corTexto: 'text-purple-400' };
         }
 
         function aplicarStatusVisual(aberta) {
             lojaEstaAberta = aberta;
-
             const badge = document.getElementById('badge-status');
             const txt = document.getElementById('texto-status-loja');
             const banner = document.getElementById('banner-fechado');
             if (!badge || !txt) return;
 
             const dot = badge.querySelector('span:first-child');
-
             if (aberta) {
-                badge.className = 'inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                badge.className = 'inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
                 txt.innerText = 'Aberto agora';
                 if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
                 if (banner) banner.classList.add('hidden');
             } else {
-                badge.className = 'inline-flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20';
+                badge.className = 'inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20';
                 txt.innerText = 'Fechado no momento';
                 if (dot) dot.className = 'w-2 h-2 rounded-full bg-red-500';
                 if (banner) banner.classList.remove('hidden');
@@ -517,84 +516,145 @@ try {
                     cat.produtos.forEach(p => produtosCatalogo.push(p));
                 });
 
-                if (cardapioCompleto.length > 0 && !categoriaAtivaId) {
-                    categoriaAtivaId = cardapioCompleto[0].categoria_id;
-                }
-
-                renderizarCategorias();
-                renderizarProdutos();
+                renderizarNavegacaoCategorias();
+                renderizarFeedCompleto();
+                configurarObservadorRolagem();
             } catch (err) {
                 console.error(err);
             }
         }
 
-        function renderizarCategorias() {
+        // Renderiza todas as categorias abertas no topo e pula direto no clique
+        function renderizarNavegacaoCategorias() {
             const nav = document.getElementById('nav-categorias');
             nav.innerHTML = '';
 
-            cardapioCompleto.forEach(cat => {
+            cardapioCompleto.forEach((cat, idx) => {
+                if (!cat.produtos || cat.produtos.length === 0) return;
+
+                const cfg = obterConfigCategoria(cat.categoria_nome);
+                const nomeLimpo = cat.categoria_nome
+                    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+                    .replace(/[⭐🍔🍕🥤🍟🥪🍰🥖]/g, '')
+                    .trim();
+
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                const ativa = cat.categoria_id === categoriaAtivaId;
-                const emoji = obterEmojiCategoria(cat.categoria_nome);
-                const nomeLimpo = cat.categoria_nome.replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
-
-                btn.className = `px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                    ativa 
-                        ? 'bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white shadow-lg shadow-purple-950/70 scale-105' 
-                        : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/5'
-                }`;
-                btn.innerHTML = `<span>${emoji}</span> <span>${nomeLimpo}</span>`;
+                btn.id = `btn-tab-${cat.categoria_id}`;
+                btn.className = `px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 border border-white/5 bg-white/5 text-slate-300 hover:bg-white/10 active:scale-95 ${idx === 0 ? 'cat-tab-ativa' : ''}`;
+                
+                btn.innerHTML = `
+                    <span class="w-5 h-5 rounded-lg ${cfg.corBg} ${cfg.corTexto} flex items-center justify-center text-[10px] shadow-sm">
+                        <i class="fa-solid ${cfg.icone}"></i>
+                    </span>
+                    <span>${nomeLimpo}</span>
+                `;
+                
+                // Rola o ecrã até a categoria com compensação exata da barra fixa
                 btn.onclick = () => {
-                    categoriaAtivaId = cat.categoria_id;
-                    renderizarCategorias();
-                    renderizarProdutos();
+                    const el = document.getElementById(`secao-cat-${cat.categoria_id}`);
+                    if (el) {
+                        navegandoPorClique = true;
+
+                        document.querySelectorAll('#nav-categorias button').forEach(b => b.classList.remove('cat-tab-ativa'));
+                        btn.classList.add('cat-tab-ativa');
+
+                        const barraTopo = document.getElementById('barra-topo-categorias');
+                        const alturaBarra = barraTopo ? barraTopo.offsetHeight : 80;
+                        const posicaoTopo = el.getBoundingClientRect().top + window.pageYOffset - (alturaBarra + 10);
+
+                        window.scrollTo({
+                            top: posicaoTopo,
+                            behavior: 'smooth'
+                        });
+
+                        setTimeout(() => {
+                            navegandoPorClique = false;
+                        }, 700);
+                    }
                 };
                 nav.appendChild(btn);
             });
         }
 
-        function renderizarProdutos() {
+        // Renderiza todas as categorias de forma contínua
+        function renderizarFeedCompleto() {
             const main = document.getElementById('container-cardapio');
             main.innerHTML = '';
 
-            const categoriaAtual = cardapioCompleto.find(c => c.categoria_id === categoriaAtivaId);
-            if (!categoriaAtual) return;
+            cardapioCompleto.forEach(cat => {
+                if (!cat.produtos || cat.produtos.length === 0) return;
 
-            const ehPizza = categoriaAtual.categoria_nome.toLowerCase().includes('pizza');
+                const ehPizza = cat.categoria_nome.toLowerCase().includes('pizza');
+                const cfg = obterConfigCategoria(cat.categoria_nome);
+                const nomeCatLimpo = cat.categoria_nome
+                    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+                    .replace(/[⭐🍔🍕🥤🍟🥪🍰🥖]/g, '')
+                    .trim();
 
-            let html = '';
-            categoriaAtual.produtos.forEach(p => {
-                const preco = parseFloat(p.preco).toFixed(2).replace('.', ',');
-                const precoTexto = ehPizza ? `A partir de R$ ${preco}` : `R$ ${preco}`;
-                const botaoTexto = ehPizza ? `🍕 Montar` : `+ Adicionar`;
+                let produtosHtml = '';
+                cat.produtos.forEach(p => {
+                    const preco = parseFloat(p.preco).toFixed(2).replace('.', ',');
+                    const precoTexto = ehPizza ? `A partir de R$ ${preco}` : `R$ ${preco}`;
+                    const botaoTexto = ehPizza ? `<i class="fa-solid fa-pizza-slice mr-1"></i> Montar` : `<i class="fa-solid fa-plus mr-1"></i> Adicionar`;
 
-                html += `
-                    <div class="p-4 bg-dark-card border border-dark-border rounded-2xl flex justify-between items-center gap-3.5 hover:border-brand-500/40 transition cursor-pointer group" onclick="clicouNoProduto(${p.id})">
-                        <div class="flex-1 pr-1">
-                            <h3 class="text-sm font-bold text-white group-hover:text-brand-500 transition">${p.nome}</h3>
-                            <p class="text-xs text-slate-400 mt-1 leading-snug line-clamp-2">${p.descricao || ''}</p>
-                            <span class="inline-block mt-2 font-black text-sm text-brand-500">${precoTexto}</span>
+                    produtosHtml += `
+                        <div class="p-4 bg-dark-card border border-dark-border rounded-2xl flex justify-between items-center gap-3.5 hover:border-purple-500/40 transition cursor-pointer group shadow-sm" onclick="clicouNoProduto(${p.id})">
+                            <div class="flex-1 pr-1">
+                                <h3 class="text-sm font-bold text-white group-hover:text-purple-400 transition">${p.nome}</h3>
+                                ${p.descricao ? `<p class="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">${p.descricao}</p>` : ''}
+                                <span class="inline-block mt-2 font-black text-sm text-purple-400">${precoTexto}</span>
+                            </div>
+                            <button type="button" class="bg-purple-600/15 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 text-xs font-bold px-3 py-2 rounded-xl transition flex-shrink-0 active:scale-95 flex items-center">
+                                ${botaoTexto}
+                            </button>
                         </div>
-                        <button type="button" class="bg-brand-600/15 hover:bg-brand-600 text-brand-500 hover:text-white border border-brand-500/30 text-xs font-bold px-3 py-2 rounded-xl transition flex-shrink-0">
-                            ${botaoTexto}
-                        </button>
+                    `;
+                });
+
+                const section = document.createElement('section');
+                section.id = `secao-cat-${cat.categoria_id}`;
+                section.className = 'secao-categoria space-y-3 pt-2';
+                section.dataset.catId = cat.categoria_id;
+
+                section.innerHTML = `
+                    <div class="flex justify-between items-center pb-2 border-b border-white/5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg ${cfg.corBg} ${cfg.corTexto} flex items-center justify-center text-xs">
+                                <i class="fa-solid ${cfg.icone}"></i>
+                            </span>
+                            <h2 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-white">
+                                ${nomeCatLimpo}
+                            </h2>
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">${cat.produtos.length} ${cat.produtos.length === 1 ? 'item' : 'itens'}</span>
                     </div>
+                    <div class="space-y-3">${produtosHtml}</div>
                 `;
+
+                main.appendChild(section);
             });
+        }
 
-            const emojiCat = obterEmojiCategoria(categoriaAtual.categoria_nome);
-            const nomeCatLimpo = categoriaAtual.categoria_nome.replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+        // Sincroniza a pílula ativa conforme a pessoa rola
+        function configurarObservadorRolagem() {
+            const secoes = document.querySelectorAll('.secao-categoria');
+            const observer = new IntersectionObserver((entries) => {
+                if (navegandoPorClique) return;
 
-            main.innerHTML = `
-                <div class="flex justify-between items-center pb-2 border-b border-white/5">
-                    <h2 class="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                        <span>${emojiCat}</span> <span>${nomeCatLimpo}</span>
-                    </h2>
-                    <span class="text-[11px] font-bold text-brand-500 bg-brand-900/40 px-2.5 py-0.5 rounded-full border border-brand-500/20">${categoriaAtual.produtos.length} opções</span>
-                </div>
-                <div class="space-y-3 pt-1">${html}</div>
-            `;
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const catId = entry.target.dataset.catId;
+                        document.querySelectorAll('#nav-categorias button').forEach(b => b.classList.remove('cat-tab-ativa'));
+                        const btnAtivo = document.getElementById(`btn-tab-${catId}`);
+                        if (btnAtivo) {
+                            btnAtivo.classList.add('cat-tab-ativa');
+                        }
+                    }
+                });
+            }, { rootMargin: '-100px 0px -65% 0px' });
+
+            secoes.forEach(s => observer.observe(s));
         }
 
         async function clicouNoProduto(id) {
@@ -605,7 +665,6 @@ try {
 
             let prod = produtosCatalogo.find(p => p.id == id);
 
-            // Se for o especial do dia e o catálogo ainda estiver carregando, busca diretamente
             if (!prod) {
                 try {
                     const res = await fetch(`api/produtos.php?estab=${estabId}&id=${id}`);
@@ -645,7 +704,7 @@ try {
                 precoBase: parseFloat(prod.preco)
             };
 
-            document.getElementById('pizza-modal-titulo').innerText = `${prod.nome} 🍕`;
+            document.getElementById('pizza-modal-titulo').innerHTML = `<i class="fa-solid fa-pizza-slice text-amber-400 mr-1.5"></i> ${prod.nome}`;
             document.getElementById('pizza-modal-limite').innerText = `Selecione até ${maxSabores} sabores`;
             document.getElementById('obs-pizza').value = '';
 
@@ -653,9 +712,9 @@ try {
             container.innerHTML = '';
 
             const tipos = [
-                { key: 'tradicional', nome: 'Sabores Tradicionais 🧀' },
-                { key: 'especial', nome: 'Sabores Especiais ⭐' },
-                { key: 'premium', nome: 'Sabores Premium 👑' }
+                { key: 'tradicional', nome: 'Sabores Tradicionais', icone: 'fa-cheese' },
+                { key: 'especial', nome: 'Sabores Especiais', icone: 'fa-star' },
+                { key: 'premium', nome: 'Sabores Premium', icone: 'fa-crown' }
             ];
 
             tipos.forEach(tipo => {
@@ -668,20 +727,22 @@ try {
                     itensHtml += `
                         <label class="flex justify-between items-center py-2.5 border-b border-white/5 last:border-none text-xs cursor-pointer">
                             <div class="pr-2 flex items-start gap-2.5">
-                                <input type="checkbox" name="sabores_pizza" value="${s.id}" data-nome="${s.nome}" data-preco="${s[campoTamanho]}" onchange="validarLimiteSabores(this)" class="mt-0.5 accent-brand-500">
+                                <input type="checkbox" name="sabores_pizza" value="${s.id}" data-nome="${s.nome}" data-preco="${s[campoTamanho]}" onchange="validarLimiteSabores(this)" class="mt-0.5 accent-purple-500">
                                 <div>
                                     <strong class="text-white">${s.nome}</strong>
                                     <div class="text-[11px] text-slate-400 mt-0.5 leading-tight">${s.ingredientes}</div>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold text-brand-500 whitespace-nowrap">R$ ${preco}</span>
+                            <span class="text-xs font-bold text-purple-400 whitespace-nowrap">R$ ${preco}</span>
                         </label>
                     `;
                 });
 
                 container.innerHTML += `
                     <div class="p-3.5 bg-dark-card border border-dark-border rounded-2xl space-y-2">
-                        <div class="text-xs font-bold text-slate-200 uppercase tracking-wider">${tipo.nome}</div>
+                        <div class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid ${tipo.icone} text-purple-400 text-[11px]"></i> ${tipo.nome}
+                        </div>
                         <div>${itensHtml}</div>
                     </div>
                 `;
@@ -772,9 +833,7 @@ try {
             const nomes = marcados.map(i => i.dataset.nome);
             let texto = nomes.length === 1 ? `1/1 Inteira: ${nomes[0]}` : (nomes.length === 2 ? `1/2 ${nomes[0]} + 1/2 ${nomes[1]}` : `1/3 ${nomes[0]} + 1/3 ${nomes[1]} + 1/3 ${nomes[2]}`);
 
-            if (textoBorda) {
-                texto += ` | ${textoBorda}`;
-            }
+            if (textoBorda) texto += ` | ${textoBorda}`;
 
             carrinho.push({
                 id: parseInt(pizzaEmMontagem.id),
@@ -825,10 +884,10 @@ try {
                     itensHtml += `
                         <label class="flex justify-between items-center py-2 border-b border-white/5 last:border-none text-xs cursor-pointer">
                             <div class="flex items-center gap-2">
-                                <input type="${tipoInput}" name="grupo_${grp.id}" value="${ad.id}" data-nome="${ad.nome}" data-preco="${ad.preco}" ${checked} onchange="calcularTotalCustomizacao()" class="accent-brand-500">
+                                <input type="${tipoInput}" name="grupo_${grp.id}" value="${ad.id}" data-nome="${ad.nome}" data-preco="${ad.preco}" ${checked} onchange="calcularTotalCustomizacao()" class="accent-purple-500">
                                 <span class="text-slate-200">${ad.nome}</span>
                             </div>
-                            <strong class="text-brand-500">${precoTxt}</strong>
+                            <strong class="text-purple-400">${precoTxt}</strong>
                         </label>
                     `;
                 });
@@ -837,7 +896,7 @@ try {
                     <div class="p-4 bg-dark-card border border-dark-border rounded-2xl space-y-2">
                         <div class="text-xs font-bold text-white flex justify-between items-center">
                             <span>${grp.nome}</span>
-                            ${grp.obrigatorio ? `<span class="bg-brand-600 text-white text-[10px] px-2 py-0.5 rounded font-bold">Obrigatório</span>` : `<span class="text-slate-400 text-[10px]">Opcional</span>`}
+                            ${grp.obrigatorio ? `<span class="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded font-bold">Obrigatório</span>` : `<span class="text-slate-400 text-[10px]">Opcional</span>`}
                         </div>
                         <div>${itensHtml}</div>
                     </div>
@@ -939,7 +998,7 @@ try {
                     <div class="py-2.5 flex justify-between items-center text-xs">
                         <div class="flex-1 pr-2">
                             <strong class="text-white">${item.qtd}x ${item.nome}</strong>
-                            ${item.adicionais_texto ? `<div class="text-[11px] text-brand-500 mt-0.5">${item.adicionais_texto}</div>` : ''}
+                            ${item.adicionais_texto ? `<div class="text-[11px] text-purple-400 mt-0.5">${item.adicionais_texto}</div>` : ''}
                             ${item.obs_item ? `<div class="text-[11px] text-amber-400 mt-0.5">📝 ${item.obs_item}</div>` : ''}
                         </div>
                         <div class="flex items-center gap-3">
@@ -1001,21 +1060,15 @@ try {
                     carrinho = [];
                     atualizarInterface();
 
-                    if (resposta.status_pagamento === 'pendente') {
-                        // Pedido via Pix: mostra o QR e só segue quando o
-                        // pagamento for confirmado (automático ou manual).
-                        abrirTelaPagamentoPix(resposta);
-                    } else {
-                        Swal.fire({
-                            title: 'Pedido Confirmado! 🎉',
-                            html: `Seu pedido foi recebido com sucesso e <b>já está sendo preparado</b>!`,
-                            icon: 'success',
-                            confirmButtonColor: '#9333ea',
-                            confirmButtonText: 'Acompanhar Status'
-                        }).then(() => {
-                            window.location.href = `acompanhar.php?id=${resposta.pedido_id}`;
-                        });
-                    }
+                    Swal.fire({
+                        title: 'Pedido Confirmado! 🎉',
+                        html: `Seu pedido foi recebido com sucesso e <b>já está sendo preparado</b>!`,
+                        icon: 'success',
+                        confirmButtonColor: '#9333ea',
+                        confirmButtonText: 'Acompanhar Status'
+                    }).then(() => {
+                        window.location.href = `acompanhar.php?id=${resposta.pedido_id}`;
+                    });
                 } else {
                     Swal.fire('Atenção', resposta.erro, 'error');
                     btn.disabled = false;
@@ -1028,112 +1081,9 @@ try {
             }
         }
 
-        // ---------------------------------------------------------------
-        // Pagamento via Pix: mostra o QR Code e aguarda a confirmação.
-        // ---------------------------------------------------------------
-        let intervaloChecagemPix = null;
-
-        function abrirTelaPagamentoPix(resposta) {
-            window.pedidoPixAtualId = resposta.pedido_id;
-            const modal = document.getElementById('modal-pix');
-            const boxQr = document.getElementById('pix-qr-box');
-            const inputCopiaCola = document.getElementById('pix-copia-cola');
-            const avisoManual = document.getElementById('pix-aviso-manual');
-            const statusTexto = document.getElementById('pix-status-texto');
-
-            inputCopiaCola.value = resposta.pix_copia_cola || '';
-            statusTexto.textContent = 'Aguardando pagamento...';
-            avisoManual.classList.toggle('hidden', !!resposta.pix_automatico);
-
-            boxQr.innerHTML = '';
-            if (resposta.pix_qr_base64) {
-                // Mercado Pago já manda o QR pronto como imagem.
-                boxQr.innerHTML = `<img src="data:image/png;base64,${resposta.pix_qr_base64}" class="w-full h-full object-contain" alt="QR Code Pix">`;
-            } else if (resposta.pix_copia_cola && window.QRCode) {
-                // Sem gateway: desenha o QR no navegador a partir do texto,
-                // sem enviar isso pra nenhum servidor externo.
-                new QRCode(boxQr, { text: resposta.pix_copia_cola, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff' });
-            } else {
-                boxQr.innerHTML = `<p class="text-xs text-slate-400 text-center p-4">Chave Pix não configurada pela loja. Combine o pagamento direto com o estabelecimento.</p>`;
-            }
-
-            modal.classList.remove('hidden');
-
-            if (resposta.pix_automatico) {
-                intervaloChecagemPix = setInterval(() => verificarPagamentoPix(resposta.pedido_id), 4000);
-            }
-        }
-
-        function copiarChavePix() {
-            const input = document.getElementById('pix-copia-cola');
-            input.select();
-            navigator.clipboard.writeText(input.value).then(() => {
-                Swal.fire({ icon: 'success', title: 'Copiado!', toast: true, position: 'top', timer: 1500, showConfirmButton: false });
-            });
-        }
-
-        async function verificarPagamentoPix(pedidoId) {
-            try {
-                const res = await fetch(`api/status_pedido.php?id=${pedidoId}`);
-                const dados = await res.json();
-
-                if (dados.sucesso && dados.status_pagamento === 'pago') {
-                    clearInterval(intervaloChecagemPix);
-                    document.getElementById('pix-status-texto').textContent = 'Pagamento confirmado!';
-                    setTimeout(() => { window.location.href = `acompanhar.php?id=${pedidoId}`; }, 1200);
-                } else if (dados.sucesso && dados.status_pagamento === 'recusado') {
-                    clearInterval(intervaloChecagemPix);
-                    document.getElementById('pix-status-texto').textContent = 'Pagamento não aprovado. Tente novamente.';
-                }
-            } catch (e) {
-                // Falha momentânea de rede não interrompe a tentativa seguinte.
-            }
-        }
-
-        function continuarSemConfirmacao(pedidoId) {
-            // Caminho manual (sem Mercado Pago): o cliente já fez o Pix por
-            // fora, mas o sistema não tem como confirmar sozinho — a loja
-            // confirma no painel depois de ver o dinheiro cair no banco.
-            window.location.href = `acompanhar.php?id=${pedidoId}`;
-        }
-
-        // Inicialização
         carregarCardapio();
         checarStatusLojaEmTempoReal();
         setInterval(checarStatusLojaEmTempoReal, 3000);
     </script>
-
-    <!-- Modal de Pagamento Pix -->
-    <div id="modal-pix" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="w-full max-w-sm bg-dark-surface border border-dark-border rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div class="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
-                <i class="fa-solid fa-qrcode text-emerald-400 text-2xl"></i>
-            </div>
-            <div>
-                <h2 class="text-sm font-extrabold text-white">Pague com Pix pra confirmar</h2>
-                <p id="pix-status-texto" class="text-xs text-slate-400 mt-1">Aguardando pagamento...</p>
-            </div>
-
-            <div id="pix-qr-box" class="w-56 h-56 mx-auto bg-white rounded-2xl flex items-center justify-center p-2"></div>
-
-            <div>
-                <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 text-left">Ou copie o código Pix</label>
-                <div class="flex items-center gap-2">
-                    <input id="pix-copia-cola" readonly class="flex-1 p-2.5 bg-dark-card border border-dark-border rounded-xl text-white text-[10px] font-mono outline-none truncate">
-                    <button onclick="copiarChavePix()" class="w-10 h-10 rounded-xl bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center transition shrink-0">
-                        <i class="fa-solid fa-copy text-xs"></i>
-                    </button>
-                </div>
-            </div>
-
-            <div id="pix-aviso-manual" class="hidden text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-left">
-                Depois de pagar, a loja vai confirmar o recebimento manualmente — pode levar alguns minutos.
-            </div>
-
-            <button onclick="continuarSemConfirmacao(window.pedidoPixAtualId)" id="btn-pix-continuar" class="text-xs text-slate-400 hover:text-slate-200 underline transition">
-                Já paguei, acompanhar meu pedido
-            </button>
-        </div>
-    </div>
 </body>
 </html>

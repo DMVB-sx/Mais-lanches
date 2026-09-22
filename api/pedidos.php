@@ -16,12 +16,13 @@ try {
     if ($metodo === 'GET') {
         // Busca todos os pedidos ativos (exceto os arquivados/limpos)
         $stmt = $pdo->prepare("
-            SELECT * FROM pedidos 
-            WHERE estabelecimento_id = :estab 
-            ORDER BY id DESC
-        ");
-        $stmt->execute([':estab' => $estabId]);
-        $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    SELECT * FROM pedidos 
+    WHERE estabelecimento_id = :estab 
+      AND status NOT IN ('arquivado', 'aguardando_pagamento', 'cancelado')
+    ORDER BY id DESC
+");
+$stmt->execute([':estab' => $estabId]);
+$pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($pedidos as &$p) {
             $stmtItens = $pdo->prepare("

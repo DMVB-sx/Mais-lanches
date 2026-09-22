@@ -478,4 +478,4 @@ $produtosIniciais = $stmtProd->fetchAll(PDO::FETCH_ASSOC);
     </script>
 
 </body>
-</html>
+</html> 
